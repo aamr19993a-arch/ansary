@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>أنصاري - رفيقك في الذكر</title>
+    <meta name="description" content="تطبيق أنصاري للأذكار والتسبيح">
+
+    <!-- PWA Settings -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#26A69A">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="أنصاري">
+    <link rel="apple-touch-icon" href="app_logo.svg">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500;600&family=Outfit:wght@300;400;500;600&display=swap"
+        rel="stylesheet">
+
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="splash-screen">
+        <div class="splash-content">
+            <img src="app_logo.svg" alt="أنصاري" class="splash-logo">
+            <div class="splash-loader"></div>
+        </div>
+    </div>
+
+    <div id="app">
+        <header class="app-header">
+            <div class="logo-container" style="display: flex; align-items: center; gap: 0.75rem;">
+                <img src="app_logo.svg" alt="أنصاري"
+                    style="width: 45px; height: 45px; border-radius: 12px; box-shadow: var(--shadow-sm);">
+                <div>
+                    <h1 class="app-name" style="font-size: 1.4rem;">أنصاري</h1>
+                    <p class="app-subtitle" style="font-size: 0.8rem;">رفيقك في الذِكر</p>
+                </div>
+            </div>
+            <button id="theme-toggle" class="icon-btn" onclick="toggleTheme()" aria-label="Toggle Theme">
+                <i class="ph ph-moon"></i>
+            </button>
+        </header>
+
+        <main id="main-content">
+            <!-- VIEW: HOME (Categories) -->
+            <div id="view-home" class="view-section fade-in">
+                <div class="greeting-section" style="margin-bottom: 2rem; padding: 0 1rem;">
+                    <h2 style="font-size: 1.5rem; color: var(--primary-color);">الأذكار</h2>
+                    <p style="color: var(--text-secondary);">اختر قسماً للبدء</p>
+                </div>
+
+                <div class="categories-grid">
+                    <div class="category-card" onclick="openAdhkar('morning')">
+                        <i class="ph ph-sun category-icon" style="color: #FFB74D;"></i>
+                        <h3 class="category-title">أذكار الصباح</h3>
+                    </div>
+                    <div class="category-card" onclick="openAdhkar('evening')">
+                        <i class="ph ph-moon-stars category-icon" style="color: #5C6BC0;"></i>
+                        <h3 class="category-title">أذكار المساء</h3>
+                    </div>
+                    <div class="category-card" onclick="openAdhkar('sleep')">
+                        <i class="ph ph-moon category-icon" style="color: #7E57C2;"></i>
+                        <h3 class="category-title">أذكار النوم والأحلام</h3>
+                    </div>
+                    <div class="category-card" onclick="openAdhkar('wakeup')">
+                        <i class="ph ph-brightness-up category-icon" style="color: #FFCA28;"></i>
+                        <h3 class="category-title">أذكار الاستيقاظ</h3>
+                    </div>
+                    <div class="category-card" onclick="openAdhkar('post_prayer')">
+                        <i class="ph ph-hands-praying category-icon" style="color: #4DB6AC;"></i>
+                        <h3 class="category-title">أذكار بعد الصلاة</h3>
+                    </div>
+                    <div class="category-card" onclick="showView('quran')">
+                        <i class="ph ph-book-open category-icon" style="color: #26A69A;"></i>
+                        <h3 class="category-title">المصحف الشريف</h3>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: QURAN INDEX -->
+            <div id="view-quran" class="view-section fade-in">
+                <div class="view-header">
+                    <button class="icon-btn" onclick="showView('home')">
+                        <i class="ph ph-caret-right"></i>
+                    </button>
+                    <h2>المصحف الشريف</h2>
+                    <div style="width: 40px;"></div>
+                </div>
+
+                <div class="search-bar">
+                    <i class="ph ph-magnifying-glass"></i>
+                    <input type="text" id="surah-search" placeholder="بحث عن سورة..." oninput="filterSurahs()">
+                </div>
+
+                <div id="surah-list" class="surah-grid">
+                    <!-- Surahs will be injected here -->
+                </div>
+            </div>
+
+            <!-- VIEW: QURAN READER -->
+            <div id="view-quran-reader" class="view-section fade-in">
+                <div class="view-header reader-header">
+                    <button class="icon-btn" onclick="showView('quran')">
+                        <i class="ph ph-caret-right"></i>
+                    </button>
+                    <div class="reader-info">
+                        <h2 id="current-surah-name">سورة...</h2>
+                        <span id="current-page-info">صفحة 1</span>
+                    </div>
+                    <button class="icon-btn" id="save-mark" onclick="saveQuranMark()">
+                        <i class="ph ph-bookmark-simple"></i>
+                    </button>
+                </div>
+
+                <div id="quran-pages-container" class="quran-pages">
+                    <!-- Pages will be lazy loaded here -->
+                </div>
+
+                <div class="reader-controls">
+                    <div class="page-slider-container">
+                        <input type="range" id="page-slider" min="1" max="604" value="1"
+                            oninput="onPageSliderChange(this.value)">
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: ADHKAR DETAIL (Carousel) -->
+            <div id="view-adhkar" class="view-section hidden">
+                <div class="header-controls"
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                    <button onclick="showView('home')" class="icon-btn"
+                        style="background: var(--card-bg); border: 1px solid var(--border-color);"><i
+                            class="ph ph-arrow-right"></i></button>
+                    <h2 id="adhkarTitle" class="category-title" style="font-size: 1.25rem; margin: 0;">الأذكار</h2>
+                    <div style="width: 40px;"></div>
+                </div>
+
+                <div class="dhikr-card fade-in">
+                    <p id="dhikrText" class="dhikr-arabic">Loading...</p>
+
+                    <div class="dhikr-controls"
+                        style="margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                        <button onclick="playAudio()" class="icon-btn" aria-label="Play Audio"><i
+                                class="ph ph-speaker-high"></i></button>
+                        <button onclick="toggleFavorite()" id="fav-btn" class="icon-btn" aria-label="Favorite"><i
+                                class="ph ph-heart"></i></button>
+                    </div>
+                </div>
+
+                <!-- Progress Counter -->
+                <div class="counter-area"
+                    style="display: flex; flex-direction: column; align-items: center; margin-top: 2rem;">
+                    <button id="dhikr-progress-btn" onclick="incrementDhikr()" class="main-btn" style="
+                        width: 140px; 
+                        height: 140px; 
+                        border-radius: 50%; 
+                        border: none; 
+                        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color)); 
+                        color: white; 
+                        font-size: 1.5rem; 
+                        font-weight: bold;
+                        box-shadow: var(--shadow-lg); 
+                        cursor: pointer;
+                        margin-bottom: 1.5rem;
+                        transition: transform 0.1s;
+                        display: flex; justify-content: center; align-items: center;
+                    ">0 / 1</button>
+
+                    <div class="nav-controls" style="display: flex; justify-content: center; gap: 1rem; width: 100%;">
+                        <button onclick="prevDhikr()" class="secondary-btn" style="
+                             background: var(--card-bg); 
+                             border: 1px solid var(--border-color); 
+                             padding: 0.75rem 1.5rem; 
+                             border-radius: var(--radius-md); 
+                             cursor: pointer;
+                             display: flex; align-items: center; gap: 0.5rem;
+                             color: var(--text-primary);
+                        "><i class="ph ph-caret-right"></i> السابق</button>
+
+                        <button onclick="nextDhikr()" class="secondary-btn" style="
+                             background: var(--card-bg); 
+                             border: 1px solid var(--border-color); 
+                             padding: 0.75rem 1.5rem; 
+                             border-radius: var(--radius-md); 
+                             cursor: pointer;
+                             display: flex; align-items: center; gap: 0.5rem;
+                             color: var(--text-primary);
+                        ">التالي <i class="ph ph-caret-left"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: TASBEEH (Free Counter) -->
+            <div id="view-tasbeeh" class="view-section hidden">
+                <div style="text-align: center; margin-bottom: 1rem; margin-top: 1rem;">
+                    <h2 style="font-size: 1.5rem; color: var(--primary-color); margin-bottom: 0.5rem;">السبحة
+                        الإلكترونية</h2>
+
+                    <!-- Dhikr Selection -->
+                    <div style="padding: 0 1.5rem;">
+                        <select id="tasbeeh-select" onchange="changeTasbeehDhikr()" style="
+                            width: 100%;
+                            padding: 0.75rem;
+                            border-radius: var(--radius-md);
+                            border: 1px solid var(--border-color);
+                            background-color: var(--card-bg);
+                            color: var(--text-primary);
+                            font-family: var(--font-arabic);
+                            font-size: 1rem;
+                            outline: none;
+                        ">
+                            <option value="free">تسبيح حر</option>
+                            <option value="subhan_allah">سبحان الله (33)</option>
+                            <option value="alhamdulillah">الحمد لله (33)</option>
+                            <option value="allahu_akbar">الله أكبر (33)</option>
+                            <option value="astaghfirullah">أستغفر الله (100)</option>
+                            <option value="la_ilaha_illa_allah">لا إله إلا الله (100)</option>
+                            <option value="subhan_allah_wa_bihamdihi">سبحان الله وبحمده (100)</option>
+                            <option value="la_hawla">لا حول ولا قوة إلا بالله</option>
+                            <option value="salat_ala_nabi">اللهم صل على محمد (10)</option>
+                            <option value="custom">مخصص...</option>
+                        </select>
+
+                        <!-- Custom Setup Fields -->
+                        <div id="custom-setup-fields" class="hidden"
+                            style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-direction: column;">
+                            <input type="text" id="custom-text-input" placeholder="اكتب الذكر هنا"
+                                oninput="updateCustomLabel()" style="
+                                padding: 0.75rem; 
+                                border: 1px solid var(--border-color); 
+                                border-radius: var(--radius-md); 
+                                width: 100%;
+                                background-color: var(--card-bg);
+                                color: var(--text-primary);
+                            ">
+                            <input type="number" id="custom-target-input" placeholder="العدد المستهدف (اختياري)" min="1"
+                                oninput="updateCustomTarget()" style="
+                                padding: 0.75rem; 
+                                border: 1px solid var(--border-color); 
+                                border-radius: var(--radius-md); 
+                                width: 100%;
+                                background-color: var(--card-bg);
+                                color: var(--text-primary);
+                            ">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="counter-area"
+                    style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh;">
+                    <div style="margin-bottom: 2rem; font-size: 1.5rem; text-align: center;">
+                        <div id="current-tasbeeh-label"
+                            style="font-size: 1.25rem; color: var(--text-secondary); margin-bottom: 0.5rem; min-height: 1.5rem;">
+                        </div>
+                        <span id="tasbeeh-counter"
+                            style="font-weight: bold; color: var(--text-primary); font-size: 4rem;">0</span>
+                    </div>
+
+                    <button onclick="incrementTasbeeh()" id="tasbeeh-btn" style="
+                        width: 220px; 
+                        height: 220px; 
+                        border-radius: 50%; 
+                        border: none; 
+                        background: linear-gradient(135deg, var(--secondary-color), var(--primary-color)); 
+                        color: white; 
+                        font-size: 2rem; 
+                        margin-bottom: 2rem;
+                        box-shadow: var(--shadow-xl);
+                        cursor: pointer;
+                        transition: transform 0.1s;
+                    "><i class="ph ph-hand-tap"></i></button>
+
+                    <button onclick="resetTasbeeh()" class="reset-btn" style="
+                        background: none; 
+                        border: 1px solid var(--border-color); 
+                        padding: 0.75rem 2rem; 
+                        border-radius: var(--radius-full); 
+                        cursor: pointer;
+                        color: var(--text-secondary);
+                        font-size: 1rem;
+                    ">تصفير العداد</button>
+                </div>
+            </div>
+
+
+
+            <!-- VIEW: FAVORITES -->
+            <div id="view-favorites" class="view-section hidden">
+                <h2 style="margin-bottom: 1.5rem; padding: 0 1rem;">المفضلة</h2>
+                <div id="favorites-list" class="azkar-list" style="padding: 0 1rem;">
+                    <!-- Items will be injected here -->
+                    <p style="text-align: center; color: var(--text-secondary); margin-top: 2rem;">لا توجد أذكار مفضلة
+                        حتى الآن</p>
+                </div>
+            </div>
+
+            <!-- VIEW: SETTINGS -->
+            <div id="view-settings" class="view-section hidden">
+                <h2 style="margin-bottom: 1.5rem; padding: 0 1rem;">الإعدادات</h2>
+                <div style="padding: 0 1rem;">
+                    <div class="category-card" onclick="toggleTheme()"
+                        style="flex-direction: row; justify-content: space-between; width: 100%; margin-bottom: 1rem; align-items: center;">
+                        <span style="font-size: 1.1rem;">الوضع الليلي</span>
+                        <i class="ph ph-moon" style="font-size: 1.5rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <nav class="bottom-nav">
+            <button class="nav-item active" onclick="showView('home')" id="nav-home">
+                <i class="ph ph-house"></i>
+                <span>الرئيسية</span>
+            </button>
+            <button class="nav-item" onclick="showView('tasbeeh')" id="nav-tasbeeh">
+                <i class="ph ph-hand-tap"></i>
+                <span>التسبيح</span>
+            </button>
+            <button class="nav-item" onclick="showView('favorites')" id="nav-favorites">
+                <i class="ph ph-heart"></i>
+                <span>المفضلة</span>
+            </button>
+            <button class="nav-item" onclick="showView('settings')" id="nav-settings">
+                <i class="ph ph-gear"></i>
+                <span>الإعدادات</span>
+            </button>
+        </nav>
+
+        <!-- Audio Player -->
+        <audio id="bg-audio" loop></audio>
+        <audio id="quran-audio"></audio>
+    </div>
+
+    <!-- Ayah Context Menu -->
+    <div id="ayah-menu" class="context-menu hidden">
+        <button onclick="playAyahAudio()"><i class="ph ph-play-circle"></i> استماع</button>
+        <button onclick="showTafsir()"><i class="ph ph-book-open"></i> التفسير</button>
+        <button onclick="copyAyah()"><i class="ph ph-copy"></i> نسخ</button>
+        <button onclick="shareAyah()"><i class="ph ph-share-network"></i> مشاركة</button>
+    </div>
+
+    <!-- Tafsir Modal -->
+    <div id="tafsir-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="tafsir-ayah-title">تفسير الآية</h3>
+                <button class="icon-btn" onclick="closeTafsir()"><i class="ph ph-x"></i></button>
+            </div>
+            <div class="modal-body">
+                <p id="tafsir-text">جاري تحميل التفسير...</p>
+            </div>
+            <div class="modal-footer">
+                <p id="tafsir-source">تفسير الجلالين</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="data.js"></script>
+    <script src="quran.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>
