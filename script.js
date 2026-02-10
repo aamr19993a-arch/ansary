@@ -38,9 +38,146 @@ if (typeof azkarData !== 'undefined') {
 }
 
 const texts = {
-    ar: { app: "أنصاري", tasbeeh: "تسبيح", reset: "إعادة", reminder: "📿 حان وقت الأذكار" },
-    en: { app: "Ansari", tasbeeh: "Tasbeeh", reset: "Reset", reminder: "📿 Time for Dhikr" }
+    ar: {
+        app: "أنصاري",
+        home: "الرئيسية",
+        tasbeeh: "التسبيح",
+        favorites: "المفضلة",
+        settings: "الإعدادات",
+        nightMode: "الوضع الليلي",
+        language: "اللغة (Language)",
+        currentLang: "العربية",
+        reminders: "تذكير الأذكار",
+        save: "حفظ",
+        morning: "أذكار الصباح",
+        evening: "أذكار المساء",
+        sleep: "أذكار النوم",
+        wakeup: "أذكار الاستيقاظ",
+        post_prayer: "أذكار بعد الصلاة",
+        quran: "المصحف الشريف",
+        search: "بحث عن سورة...",
+        reset: "تصفير العداد",
+        next: "التالي",
+        prev: "السابق",
+        done: "تم الانتهاء من الأذكار لهذه المجموعة",
+        audioErr: "الصوت غير متوفر حالياً",
+        reminderSet: "تم ضبط التذكير بنجاح",
+        notifDenied: "يرجى تفعيل التنبيهات من إعدادات المتصفح",
+        categories: "الأقسام"
+    },
+    en: {
+        app: "Ansari",
+        home: "Home",
+        tasbeeh: "Tasbeeh",
+        favorites: "Favorites",
+        settings: "Settings",
+        nightMode: "Night Mode",
+        language: "Language",
+        currentLang: "English",
+        reminders: "Dhikr Reminders",
+        save: "Save",
+        morning: "Morning Dhikr",
+        evening: "Evening Dhikr",
+        sleep: "Sleep Dhikr",
+        wakeup: "Wake-up Dhikr",
+        post_prayer: "Post-Prayer Dhikr",
+        quran: "Holy Quran",
+        search: "Search Surah...",
+        reset: "Reset Counter",
+        next: "Next",
+        prev: "Previous",
+        done: "You have finished this category",
+        audioErr: "Audio not available",
+        reminderSet: "Reminder set successfully",
+        notifDenied: "Please enable notifications in browser settings",
+        categories: "Categories"
+    }
 };
+
+// Language Logic
+function toggleLanguage() {
+    lang = lang === "ar" ? "en" : "ar";
+    localStorage.setItem("lang", lang);
+    applyLanguage();
+}
+
+function applyLanguage() {
+    const t = texts[lang];
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+
+    // Update UI elements by ID
+    const mappings = {
+        "nav-label-home": t.home,
+        "nav-label-tasbeeh": t.tasbeeh,
+        "nav-label-favorites": t.favorites,
+        "nav-label-settings": t.settings,
+        "settings-title": t.settings,
+        "label-night-mode": t.nightMode,
+        "label-language": t.language,
+        "label-reminders": t.reminders,
+        "current-lang-text": t.currentLang,
+        "surah-search": t.search // Placeholder handled differently
+    };
+
+    for (const [id, text] of Object.entries(mappings)) {
+        const el = document.getElementById(id);
+        if (el) {
+            if (el.tagName === "INPUT") el.placeholder = text;
+            else el.innerText = text;
+        }
+    }
+
+    // Update Category Titles and other dynamic content
+    renderDhikr();
+    if (typeof renderSurahs === 'function') renderSurahs(); // Refresh Quran list if needed
+}
+
+// Notification Logic
+function saveReminder() {
+    const timeInput = document.getElementById("reminder-time");
+    const status = document.getElementById("reminder-status");
+    const t = texts[lang];
+
+    if (!timeInput.value) return;
+
+    if (!("Notification" in window)) {
+        alert("This browser does not support notifications");
+        return;
+    }
+
+    Notification.requestPermission().then(permission => {
+        if (permission === "granted") {
+            localStorage.setItem("reminderTime", timeInput.value);
+            status.innerText = `${t.reminderSet}: ${timeInput.value}`;
+            status.style.color = "var(--primary-color)";
+            scheduleNotification(timeInput.value);
+        } else {
+            status.innerText = t.notifDenied;
+            status.style.color = "var(--danger-color, #f44336)";
+        }
+    });
+}
+
+function scheduleNotification(time) {
+    // Simple check every minute (In a real app, this would be a background task or service worker)
+    if (window.reminderInterval) clearInterval(window.reminderInterval);
+
+    window.reminderInterval = setInterval(() => {
+        const now = new Date();
+        const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+        if (currentTime === time) {
+            new Notification("تطبيق أنصاري - Ansari", {
+                body: texts[lang].reminder || "📿 حان وقت الأذكار",
+                icon: "app_logo.svg"
+            });
+            // To avoid multiple triggers in the same minute
+            clearInterval(window.reminderInterval);
+            setTimeout(() => scheduleNotification(time), 61000);
+        }
+    }, 60000);
+}
 
 // ===== View Navigation =====
 function showView(viewId) {
@@ -66,8 +203,6 @@ function showView(viewId) {
 
     // Special logic for Favorites view
     if (viewId === 'favorites') renderFavorites();
-
-
 }
 
 function openAdhkar(category) {
@@ -88,9 +223,17 @@ function renderDhikr() {
     if (!list || !list[currentIndex]) return;
 
     const item = list[currentIndex];
+    const t = texts[lang];
 
-    document.getElementById("adhkarTitle").innerText = getCategoryTitle(currentCategory);
-    document.getElementById("dhikrText").innerText = item[lang] || item.ar;
+    document.getElementById("adhkarTitle").innerText = t[currentCategory] || t.morning;
+
+    // Show English if available and language is English, else Arabic
+    const dhikrTextEl = document.getElementById("dhikrText");
+    if (lang === "en" && item.en && item.en.trim() !== "") {
+        dhikrTextEl.innerText = item.en;
+    } else {
+        dhikrTextEl.innerText = item.ar;
+    }
 
     // Update progress button
     const btn = document.getElementById("dhikr-progress-btn");
@@ -102,31 +245,17 @@ function renderDhikr() {
     favBtn.style.color = isFav ? "var(--primary-color)" : "var(--text-secondary)";
 }
 
-function getCategoryTitle(cat) {
-    const map = {
-        morning: "أذكار الصباح",
-        evening: "أذكار المساء",
-        sleep: "أذكار النوم",
-        post_prayer: "أذكار بعد الصلاة"
-    };
-    return map[cat] || "الأذكار";
-}
-
 function nextDhikr() {
     const list = adhkar[currentCategory];
     if (!list) return;
 
     currentIndex++;
     if (currentIndex >= list.length) {
-        // End of list
-        currentIndex = 0; // Loop back or maybe show a "Done" screen?
-        // For now, loop back
-        alert("تم الانتهاء من الأذكار لهذه المجموعة");
+        alert(texts[lang].done);
         showView('home');
         return;
     }
 
-    // Reset for next item
     currentCounter = 0;
     repeatTarget = list[currentIndex].count || 1;
     renderDhikr();
@@ -145,14 +274,12 @@ function incrementDhikr() {
     if (currentCounter < repeatTarget) {
         currentCounter++;
 
-        // Visual feedback
         const btn = document.getElementById("dhikr-progress-btn");
         btn.style.transform = "scale(0.95)";
         setTimeout(() => btn.style.transform = "scale(1)", 100);
 
         if (currentCounter >= repeatTarget) {
-            // Auto advance after short delay
-            renderDhikr(); // Update to show full count first
+            renderDhikr();
             setTimeout(() => {
                 nextDhikr();
             }, 300);
@@ -164,16 +291,14 @@ function incrementDhikr() {
     }
 }
 
-// ===== Tasbeeh (Selection Mode) Logic =====
+// ===== Tasbeeh Logic =====
 function changeTasbeehDhikr() {
     const select = document.getElementById("tasbeeh-select");
     currentTasbeehDhikr = select.value;
 
-    // Show/hide custom fields
     const customFields = document.getElementById("custom-setup-fields");
     if (currentTasbeehDhikr === "custom") {
         customFields.classList.remove("hidden");
-        // Load saved custom values
         document.getElementById("custom-text-input").value = customTasbeehText;
         document.getElementById("custom-target-input").value = customTasbeehTarget || "";
     } else {
@@ -198,42 +323,33 @@ function updateCustomTarget() {
 }
 
 function updateTasbeehDisplay() {
-    const count = tasbeehData[currentTasbeehDhikr] || 0;
+    const countNum = tasbeehData[currentTasbeehDhikr] || 0;
     const target = currentTasbeehDhikr === "custom" ? customTasbeehTarget : tasbeehTargets[currentTasbeehDhikr];
 
-    // Update counter display
     if (target > 0) {
-        document.getElementById("tasbeeh-counter").innerText = `${count} / ${target}`;
+        document.getElementById("tasbeeh-counter").innerText = `${countNum} / ${target}`;
     } else {
-        document.getElementById("tasbeeh-counter").innerText = count;
+        document.getElementById("tasbeeh-counter").innerText = countNum;
     }
-
-    const select = document.getElementById("tasbeeh-select");
-    // Sync select if needed (e.g. on load)
-    if (select && select.value !== currentTasbeehDhikr) select.value = currentTasbeehDhikr;
 
     const label = document.getElementById("current-tasbeeh-label");
     if (label) {
         if (currentTasbeehDhikr === "free") {
             label.innerText = "";
         } else if (currentTasbeehDhikr === "custom") {
-            label.innerText = customTasbeehText || "تسبيح مخصص";
+            label.innerText = customTasbeehText || (lang === "ar" ? "تسبيح مخصص" : "Custom Tasbeeh");
         } else {
-            // Show the name without the (33) part for the label
+            const select = document.getElementById("tasbeeh-select");
             const text = select.options[select.selectedIndex]?.text || "";
             label.innerText = text.split('(')[0].trim();
         }
     }
 
-    // Check if target reached - change button color
-    if (target > 0 && count >= target) {
-        const btn = document.getElementById("tasbeeh-btn");
-        if (btn) {
+    const btn = document.getElementById("tasbeeh-btn");
+    if (btn) {
+        if (target > 0 && countNum >= target) {
             btn.style.background = "linear-gradient(135deg, #4CAF50, #45a049)";
-        }
-    } else {
-        const btn = document.getElementById("tasbeeh-btn");
-        if (btn) {
+        } else {
             btn.style.background = "linear-gradient(135deg, var(--secondary-color), var(--primary-color))";
         }
     }
@@ -241,12 +357,11 @@ function updateTasbeehDisplay() {
 
 function incrementTasbeeh() {
     const target = currentTasbeehDhikr === "custom" ? customTasbeehTarget : tasbeehTargets[currentTasbeehDhikr];
-    const currentCount = tasbeehData[currentTasbeehDhikr] || 0;
+    const currentCountNum = tasbeehData[currentTasbeehDhikr] || 0;
 
-    // Check if target is reached (only if target > 0)
-    if (target > 0 && currentCount >= target) {
-        // Show alert and ask if user wants to reset
-        if (confirm(`تم الوصول للهدف (${target})!\nهل تريد إعادة العداد؟`)) {
+    if (target > 0 && currentCountNum >= target) {
+        const msg = lang === "ar" ? `تم الوصول للهدف (${target})!\nهل تريد إعادة العداد؟` : `Target reached (${target})!\nReset counter?`;
+        if (confirm(msg)) {
             tasbeehData[currentTasbeehDhikr] = 0;
             localStorage.setItem("tasbeehData", JSON.stringify(tasbeehData));
             updateTasbeehDisplay();
@@ -260,26 +375,24 @@ function incrementTasbeeh() {
 
     updateTasbeehDisplay();
 
-    // Animate button
     const btn = document.getElementById("tasbeeh-btn");
     btn.style.transform = "scale(0.95)";
     setTimeout(() => btn.style.transform = "scale(1)", 100);
 
-    // Haptic feedback if available (mobile)
     if (navigator.vibrate) navigator.vibrate(5);
 
-    // Check if just reached target
     if (target > 0 && tasbeehData[currentTasbeehDhikr] === target) {
-        // Celebration - vibrate longer
         if (navigator.vibrate) navigator.vibrate([50, 100, 50]);
         setTimeout(() => {
-            alert(`مبارك! تم إكمال ${target} تسبيحة 🎉`);
+            const celebMsg = lang === "ar" ? `مبارك! تم إكمال ${target} تسبيحة 🎉` : `Congratulations! You completed ${target} Tasbeeh 🎉`;
+            alert(celebMsg);
         }, 200);
     }
 }
 
 function resetTasbeeh() {
-    if (confirm("هل أنت متأكد من تصفير العداد؟")) {
+    const msg = lang === "ar" ? "هل أنت متأكد من تصفير العداد؟" : "Are you sure you want to reset?";
+    if (confirm(msg)) {
         tasbeehData[currentTasbeehDhikr] = 0;
         localStorage.setItem("tasbeehData", JSON.stringify(tasbeehData));
         updateTasbeehDisplay();
@@ -299,7 +412,7 @@ function toggleFavorite() {
         favorites.push(text);
     }
     localStorage.setItem("fav", JSON.stringify(favorites));
-    renderDhikr(); // Update icon
+    renderDhikr();
 }
 
 function renderFavorites() {
@@ -307,7 +420,7 @@ function renderFavorites() {
     container.innerHTML = "";
 
     if (favorites.length === 0) {
-        container.innerHTML = `<div style="text-align: center; color: var(--text-secondary); margin-top: 2rem;">لا توجد أذكار مفضلة حتى الآن</div>`;
+        container.innerHTML = `<div style="text-align: center; color: var(--text-secondary); margin-top: 2rem;">${lang === "ar" ? "لا توجد أذكار مفضلة حتى الآن" : "No favorites yet"}</div>`;
         return;
     }
 
@@ -317,7 +430,7 @@ function renderFavorites() {
         div.style.marginBottom = "1rem";
         div.innerHTML = `
             <p class="dhikr-arabic" style="font-size: 1.25rem;">${text}</p>
-            <button onclick="removeFavorite('${text}')" class="icon-btn" style="color: var(--primary-color);"><i class="ph ph-trash"></i></button>
+            <button onclick="removeFavorite('${text.replace(/'/g, "\\'")}')" class="icon-btn" style="color: var(--primary-color);"><i class="ph ph-trash"></i></button>
         `;
         container.appendChild(div);
     });
@@ -345,37 +458,25 @@ function playAudio() {
         const audio = new Audio(item.audio);
         audio.play().catch(e => console.log("Audio play error", e));
     } else {
-        alert("Audio not available");
+        alert(texts[lang].audioErr);
     }
 }
 
 // Initialize
 document.addEventListener("DOMContentLoaded", () => {
     document.body.setAttribute("data-theme", theme);
-    // Determine greeting
-    const hour = new Date().getHours();
-    const greetingEl = document.getElementById("greeting");
-    if (greetingEl) {
-        if (hour < 12) greetingEl.innerText = "صباح الخير";
-        else if (hour < 18) greetingEl.innerText = "طاب يومك";
-        else greetingEl.innerText = "مساء الخير";
+
+    // Check saved reminder
+    const savedTime = localStorage.getItem("reminderTime");
+    if (savedTime) {
+        const timeInput = document.getElementById("reminder-time");
+        if (timeInput) timeInput.value = savedTime;
+        scheduleNotification(savedTime);
     }
 
-    // Init Tasbeeh
-    updateTasbeehDisplay();
+    applyLanguage();
 
-    // Init Quran
-    if (typeof initQuran === 'function') initQuran();
-
-    // Splash Screen handling
-    setTimeout(() => {
-        const splash = document.getElementById('splash-screen');
-        if (splash) {
-            splash.classList.add('splash-hidden');
-        }
-    }, 2500);
-
-    // Default View
+    // Default View logic with shortcuts
     const urlParams = new URLSearchParams(window.location.search);
     const viewParam = urlParams.get('view');
     if (viewParam) {
@@ -388,7 +489,19 @@ document.addEventListener("DOMContentLoaded", () => {
         showView('home');
     }
 
-    // Register Service Worker for PWA
+    // Init Tasbeeh
+    updateTasbeehDisplay();
+
+    // Init Quran
+    if (typeof initQuran === 'function') initQuran();
+
+    // Splash Screen
+    setTimeout(() => {
+        const splash = document.getElementById('splash-screen');
+        if (splash) splash.classList.add('splash-hidden');
+    }, 2500);
+
+    // Service Worker
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('./sw.js')

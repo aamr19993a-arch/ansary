@@ -306,12 +306,45 @@
 
             <!-- VIEW: SETTINGS -->
             <div id="view-settings" class="view-section hidden">
-                <h2 style="margin-bottom: 1.5rem; padding: 0 1rem;">الإعدادات</h2>
+                <h2 id="settings-title" style="margin-bottom: 1.5rem; padding: 0 1rem;">الإعدادات</h2>
                 <div style="padding: 0 1rem;">
+                    <!-- Theme Toggle -->
                     <div class="category-card" onclick="toggleTheme()"
                         style="flex-direction: row; justify-content: space-between; width: 100%; margin-bottom: 1rem; align-items: center;">
-                        <span style="font-size: 1.1rem;">الوضع الليلي</span>
+                        <span id="label-night-mode" style="font-size: 1.1rem;">الوضع الليلي</span>
                         <i class="ph ph-moon" style="font-size: 1.5rem;"></i>
+                    </div>
+
+                    <!-- Language Toggle -->
+                    <div class="category-card" onclick="toggleLanguage()"
+                        style="flex-direction: row; justify-content: space-between; width: 100%; margin-bottom: 1rem; align-items: center;">
+                        <span id="label-language" style="font-size: 1.1rem;">اللغة (Language)</span>
+                        <span id="current-lang-text"
+                            style="font-weight: bold; color: var(--primary-color);">العربية</span>
+                    </div>
+
+                    <!-- Reminders -->
+                    <div class="card"
+                        style="padding: 1.5rem; border-radius: var(--radius-lg); background: var(--card-bg); border: 1px solid var(--border-color); margin-bottom: 1rem;">
+                        <h3 id="label-reminders"
+                            style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                            <i class="ph ph-bell-ringing" style="color: var(--primary-color);"></i>
+                            تذكير الأذكار
+                        </h3>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="time" id="reminder-time" style="
+                                flex: 1;
+                                padding: 0.75rem;
+                                border-radius: var(--radius-md);
+                                border: 1px solid var(--border-color);
+                                background: var(--bg-color);
+                                color: var(--text-primary);
+                            ">
+                            <button onclick="saveReminder()" class="main-btn"
+                                style="padding: 0.75rem 1.5rem; border-radius: var(--radius-md); border: none; background: var(--primary-color); color: white; cursor: pointer;">حفظ</button>
+                        </div>
+                        <p id="reminder-status"
+                            style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.75rem;"></p>
                     </div>
                 </div>
             </div>
@@ -320,19 +353,19 @@
         <nav class="bottom-nav">
             <button class="nav-item active" onclick="showView('home')" id="nav-home">
                 <i class="ph ph-house"></i>
-                <span>الرئيسية</span>
+                <span id="nav-label-home">الرئيسية</span>
             </button>
             <button class="nav-item" onclick="showView('tasbeeh')" id="nav-tasbeeh">
                 <i class="ph ph-hand-tap"></i>
-                <span>التسبيح</span>
+                <span id="nav-label-tasbeeh">التسبيح</span>
             </button>
             <button class="nav-item" onclick="showView('favorites')" id="nav-favorites">
                 <i class="ph ph-heart"></i>
-                <span>المفضلة</span>
+                <span id="nav-label-favorites">المفضلة</span>
             </button>
             <button class="nav-item" onclick="showView('settings')" id="nav-settings">
                 <i class="ph ph-gear"></i>
-                <span>الإعدادات</span>
+                <span id="nav-label-settings">الإعدادات</span>
             </button>
         </nav>
 
