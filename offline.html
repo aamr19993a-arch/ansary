@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>أنت خارج الاتصال - أنصاري</title>
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Outfit:wght@400;600&display=swap"
+        rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style>
+        :root {
+            --primary-color: #26A69A;
+            --secondary-color: #4DB6AC;
+            --bg-color: #f8fafb;
+            --text-primary: #2c3e50;
+            --text-secondary: #7f8c8d;
+            --card-bg: #ffffff;
+            --radius: 20px;
+            --shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --text-primary: #e0e0e0;
+            --text-secondary: #b0b0b0;
+            --shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        body {
+            font-family: 'Outfit', 'Amiri', serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 400px;
+            width: 100%;
+            padding: 40px 30px;
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+        }
+
+        .icon-container {
+            width: 80px;
+            height: 80px;
+            background: rgba(38, 166, 154, 0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 25px;
+            color: var(--primary-color);
+            font-size: 40px;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 12px;
+            font-family: 'Amiri', serif;
+        }
+
+        p {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            text-decoration: none;
+            padding: 14px 28px;
+            border-radius: 50px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(38, 166, 154, 0.3);
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-size: 1rem;
+        }
+
+        .btn:active {
+            transform: scale(0.96);
+        }
+
+        .logo-small {
+            width: 60px;
+            height: 60px;
+            margin-bottom: 15px;
+            border-radius: 15px;
+        }
+    </style>
+</head>
+
+<body data-theme="light">
+    <div class="container">
+        <img src="app_logo.svg" alt="أنصاري" class="logo-small">
+        <div class="icon-container">
+            <i class="ph ph-wifi-slash"></i>
+        </div>
+        <h1>لا يوجد اتصال بالإنترنت</h1>
+        <p>يبدو أنك لست متصلاً بالإنترنت حالياً. لا تقلق، يمكنك الاستمرار في استخدام التطبيق للأذكار المحملة مسبقاً.</p>
+        <button class="btn" onclick="window.location.reload()">
+            <i class="ph ph-arrow-clockwise"></i>
+            إعادة المحاولة
+        </button>
+    </div>
+
+    <script>
+        // Sync theme with localStorage if available
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme) {
+            document.body.setAttribute('data-theme', savedTheme);
+        }
+    </script>
+</body>
+
+</html>
