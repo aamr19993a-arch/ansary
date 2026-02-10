@@ -12,7 +12,7 @@ async function initQuran() {
         const response = await fetch(`${QURAN_API}/surah`);
         const data = await response.json();
         surahs = data.data;
-        renderSurahList(surahs);
+        renderSurahs(surahs);
 
         // Load saved page if exists
         const savedPage = localStorage.getItem('lastQuranPage');
@@ -33,13 +33,21 @@ async function initQuran() {
     }
 }
 
-function renderSurahList(surahArray) {
+function renderSurahs(surahArray) {
     const list = document.getElementById('surah-list');
-    let html = surahArray.map(s => `
+    if (!list) return;
+
+    const arrayToRender = surahArray || surahs;
+    if (!arrayToRender || arrayToRender.length === 0) return;
+
+    let html = arrayToRender.map(s => `
         <div class="surah-card" onclick="openQuranReader(${s.number})">
             <span class="surah-num">${s.number}</span>
-            <h3 class="surah-name">${s.name}</h3>
-            <span class="surah-num">${s.englishName}</span>
+            <div style="text-align: center;">
+                <h3 class="surah-name">${s.name}</h3>
+                <span style="font-size: 0.8rem; opacity: 0.7;">${s.englishName}</span>
+            </div>
+            <span class="surah-num">${s.numberOfAyahs}</span>
         </div>
     `).join('');
 
@@ -63,7 +71,7 @@ function filterSurahs() {
         s.englishName.toLowerCase().includes(query) ||
         s.number.toString() === query
     );
-    renderSurahList(filtered);
+    renderSurahs(filtered);
 }
 
 async function openQuranReader(surahNumber = null, pageNumber = null) {
