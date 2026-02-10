@@ -3,7 +3,7 @@
 
 importScripts('https://storage.googleapis.com/workbox-cdn/releases/6.4.1/workbox-sw.js');
 
-const CACHE_NAME = 'ansari-v4'; // Bumped version
+const CACHE_NAME = 'ansari-v5'; // Bumped version
 const OFFLINE_FALLBACK_PAGE = './offline.html';
 
 self.addEventListener("message", (event) => {
@@ -19,7 +19,6 @@ const PRECACHE_ASSETS = [
     './style.css',
     './script.js',
     './data.js',
-    './quran.js',
     './manifest.json',
     './app_logo.svg',
     './icon-192.png',
