@@ -376,7 +376,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 2500);
 
     // Default View
-    showView('home');
+    const urlParams = new URLSearchParams(window.location.search);
+    const viewParam = urlParams.get('view');
+    if (viewParam) {
+        if (viewParam === 'morning' || viewParam === 'evening' || viewParam === 'sleep' || viewParam === 'wakeup' || viewParam === 'post_prayer') {
+            openAdhkar(viewParam);
+        } else {
+            showView(viewParam);
+        }
+    } else {
+        showView('home');
+    }
 
     // Register Service Worker for PWA
     if ('serviceWorker' in navigator) {

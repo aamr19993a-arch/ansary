@@ -1,12 +1,14 @@
 {
   "name": "أنصاري - Ansari",
   "short_name": "أنصاري",
-  "description": "تطبيق إسلامي شامل للأذكار والمصحف الشريف",
+  "description": "تطبيق إسلامي شامل للأذكار والمصحف الشريف والسبحة الإلكترونية",
+  "id": "/ansari",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#26A69A",
   "orientation": "portrait",
+  "scope": "./",
   "categories": [
     "lifestyle",
     "education",
@@ -17,13 +19,25 @@
       "src": "app_logo.svg",
       "sizes": "192x192",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "app_logo.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     },
     {
       "src": "app_logo.svg",
       "sizes": "512x512",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "app_logo.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ],
   "screenshots": [
@@ -33,6 +47,37 @@
       "type": "image/svg+xml",
       "form_factor": "wide",
       "label": "أنصاري - رفيقك في الذكر"
+    },
+    {
+      "src": "app_logo.svg",
+      "sizes": "1024x1024",
+      "type": "image/svg+xml",
+      "form_factor": "narrow",
+      "label": "أنصاري - رفيقك في الذكر"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "أذكار الصباح",
+      "short_name": "الصباح",
+      "url": "./index.html?view=morning",
+      "icons": [
+        {
+          "src": "app_logo.svg",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "السبحة",
+      "short_name": "السبحة",
+      "url": "./index.html?view=tasbeeh",
+      "icons": [
+        {
+          "src": "app_logo.svg",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }
