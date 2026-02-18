@@ -83,6 +83,43 @@
                     </div>
                 </div>
 
+                <!-- Supplications Section -->
+                <div style="margin-top: 2rem;">
+                    <div
+                        style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                        <h2 class="section-title" style="margin: 0;">أدعية ومناجاة</h2>
+                    </div>
+                    <div class="categories-grid">
+                        <div class="category-card fade-in" onclick="openAdhkar('quranic_duas')">
+                            <div class="icon-wrapper" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+                                <i class="ph ph-book-open"></i>
+                            </div>
+                            <h3 class="category-title">أدعية قرآنية</h3>
+                            <p class="category-subtitle">من القرآن الكريم</p>
+                        </div>
+                        <div class="category-card fade-in" onclick="openAdhkar('prophetic_duas')">
+                            <div class="icon-wrapper" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;">
+                                <i class="ph ph-star"></i>
+                            </div>
+                            <h3 class="category-title">أدعية نبوية</h3>
+                            <p class="category-subtitle">من السنة النبوية</p>
+                        </div>
+                        <div class="category-card fade-in" onclick="openAdhkar('duas_kurb')">
+                            <div class="icon-wrapper" style="background: rgba(239, 68, 68, 0.1); color: #ef4444;">
+                                <i class="ph ph-heart-break"></i>
+                            </div>
+                            <h3 class="category-title">أدعية الكرب</h3>
+                            <p class="category-subtitle">للتفريج والهم</p>
+                        </div>
+                        <div class="category-card fade-in" onclick="openAdhkar('travel_istikhara')">
+                            <div class="icon-wrapper" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
+                                <i class="ph ph-airplane-tilt"></i>
+                            </div>
+                            <h3 class="category-title">السفر ومناسبات</h3>
+                            <p class="category-subtitle">استخارة، سفر..</p>
+                        </div>
+                    </div>
+                </div>
                 <!-- Prayer Times Widget (New) -->
                 <div class="category-card" onclick="showView('prayer-times')"
                     style="margin-top: 1rem; flex-direction: row; justify-content: space-between; width: 100%; padding: 1.5rem; background: linear-gradient(135deg, #0f172a, #1e293b); border: 1px solid #334155;">
@@ -363,14 +400,36 @@
                             <i class="ph ph-globe-hemisphere-east" style="color: var(--primary-color);"></i>
                             طريقة الحساب
                         </h3>
-                        <select id="calc-method-select" onchange="saveCalcMethod()"
-                            style="width: 100%; padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-primary); font-family: inherit;">
-                            <option value="4">Umm Al-Qura (Makkah)</option>
-                            <option value="5">Egyptian General Authority of Survey</option>
-                            <option value="2">ISNA (North America)</option>
-                            <option value="3">Muslim World League</option>
-                            <option value="1">Karachi</option>
-                        </select>
+                        <!-- Calculation Method -->
+                        <div style="margin-bottom: 1rem;">
+                            <label
+                                style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">
+                                طريقة الحساب (Calculation Method)
+                            </label>
+                            <select id="calc-method" onchange="saveSettings()"
+                                style="width: 100%; padding: 0.75rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); outline: none;">
+                                <option value="4">Umm Al-Qura (Makkah)</option>
+                                <option value="5">Egyptian General Authority of Survey</option>
+                                <option value="3">Muslim World League</option>
+                                <option value="2">ISNA (North America)</option>
+                                <option value="1">University of Islamic Sciences, Karachi</option>
+                                <option value="12">Union Organization islamic de France</option>
+                                <option value="13">Diyanet Isleri Baskanligi, Turkey</option>
+                            </select>
+                        </div>
+
+                        <!-- Asr Method (Madhab) -->
+                        <div style="margin-bottom: 1rem;">
+                            <label
+                                style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">
+                                مذهب العصر (Asr Method)
+                            </label>
+                            <select id="asr-method" onchange="saveSettings()"
+                                style="width: 100%; padding: 0.75rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); outline: none;">
+                                <option value="0">Shafi, Maliki, Hanbali (Standard)</option>
+                                <option value="1">Hanafi</option>
+                            </select>
+                        </div>
                     </div>
 
                     <div
@@ -381,6 +440,15 @@
                             المظهر والضبط
                         </h3>
 
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <span id="location-name"
+                                style="font-size: 0.9rem; color: var(--text-secondary);">Loading...</span>
+                            <button onclick="fetchPrayerTimes(true)" class="icon-btn"
+                                style="font-size: 0.9rem; padding: 0.25rem 0.5rem; height: auto;">
+                                <i class="ph ph-arrows-clockwise"></i>
+                            </button>
+                        </div>
                         <!-- Font Size -->
                         <div style="margin-bottom: 1.5rem;">
                             <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.5rem;"

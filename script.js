@@ -36,7 +36,8 @@ const texts = {
         ramadan_after_iftar: "بعد الإفطار", ramadan_night_qiyam: "صلاة القيام",
         duas_kurb: "أدعية الكرب", done: "تقبل الله منك!", enable_reminder: "تفعيل التنبيهات",
         quiet_hours: "ساعات الهدوء", quick_options: "خيارات سريعة", remind_every: "ذكرني كل:",
-        qibla: "القبلة", qibla_direction: "اتجاه القبلة", calibrating: "جاري المعايرة...", qibla_deg: "درجة القبلة من الشمال", recalibrate: "إعادة معايرة"
+        qibla: "القبلة", qibla_direction: "اتجاه القبلة", calibrating: "جاري المعايرة...", qibla_deg: "درجة القبلة من الشمال", recalibrate: "إعادة معايرة",
+        quranic_duas: "أدعية قرآنية", prophetic_duas: "أدعية نبوية", travel_istikhara: "السفر والاستخارة"
     },
     en: {
         app: "Ansari", home: "Home", tasbeeh: "Tasbeeh", favorites: "Favorites", settings: "Settings",
@@ -46,7 +47,8 @@ const texts = {
         ramadan_after_iftar: "After Iftar", ramadan_night_qiyam: "Night Prayer",
         duas_kurb: "Distress Duas", done: "May Allah accept!", enable_reminder: "Enable Notifications",
         quiet_hours: "Quiet Hours", quick_options: "Quick Options", remind_every: "Remind every:",
-        qibla: "Qibla", qibla_direction: "Qibla Direction", calibrating: "Calibrating...", qibla_deg: "Qibla Degrees from North", recalibrate: "Recalibrate"
+        qibla: "Qibla", qibla_direction: "Qibla Direction", calibrating: "Calibrating...", qibla_deg: "Qibla Degrees from North", recalibrate: "Recalibrate",
+        quranic_duas: "Quranic Duas", prophetic_duas: "Prophetic Duas", travel_istikhara: "Travel & Istikhara"
     }
 };
 
@@ -92,16 +94,29 @@ function updateThemeIcon() {
 
 // Navigation
 function showView(viewId) {
+    // Hide all views
     document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
     const view = document.getElementById(`view-${viewId}`);
     if (view) {
         view.classList.remove('hidden');
         view.classList.add('fade-in');
     }
+    // Update active state in bottom nav
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-    document.getElementById(`nav-${viewId}`)?.classList.add('active');
+    const activeNav = document.getElementById(`nav-${viewId}`);
+    if (activeNav) activeNav.classList.add('active');
+
+    // This line was not in the original content, but is in the instruction's example.
+    // Assuming it's part of the intended change for context.
+    // let currentView = viewId; 
+
     if (viewId === 'favorites') renderFavorites();
     window.scrollTo(0, 0);
+
+    // Stop things from other views
+    if (viewId !== 'quran-read') {
+        if (typeof stopAutoScroll === 'function') stopAutoScroll();
+    }
 }
 
 function openAdhkar(category) {
@@ -414,19 +429,23 @@ function renderSurah(ayahs, surahNumber) {
 
 // Auto Scroll Logic
 let autoScrollInterval = null;
-let isAutoScrolling = false;
-let scrollSpeed = 1; // 1, 1.5, 2
+let isScrolling = false;
+let scrollSpeed = 1; // 1x
 
 function toggleAutoScroll() {
-    if (isAutoScrolling) {
+    const btn = document.getElementById("btn-auto-scroll");
+    const icon = btn.querySelector("i");
+
+    if (isScrolling) {
         stopAutoScroll();
+        if (icon) icon.className = "ph ph-play";
     } else {
         startAutoScroll();
+        if (icon) icon.className = "ph ph-pause";
     }
 }
 
 function startAutoScroll() {
-    if (isAutoScrolling) return;
     isAutoScrolling = true;
 
     const btn = document.getElementById('btn-auto-scroll');
@@ -690,8 +709,8 @@ function showToast(title, message) {
             <i class="ph ph-bell-ringing" style="font-size:1.2rem;"></i>
         </div>
         <div class="toast-content">
-            <div class="toast-title">\${title}</div>
-            <div class="toast-message">\${message}</div>
+            <div class="toast-title">${title}</div>
+            <div class="toast-message">${message}</div>
         </div>
     `;
 
@@ -711,7 +730,9 @@ document.getElementById("reminder-toggle")?.addEventListener('change', () => req
 let prayerTimes = null;
 let nextPrayerTimeout = null;
 let notificationPermission = false;
-let calcMethod = localStorage.getItem("calcMethod") || "4"; // Default: Umm Al-Qura
+let calcMethod = localStorage.getItem("prayerTimesMethod") || "4"; // Default Makkah
+let asrMethod = localStorage.getItem("asrMethod") || "0"; // Default Standard (0)
+let quranSurahs = [];
 
 // Request Notification Permission on load (or user interaction)
 function requestNotificationPermission() {
@@ -749,9 +770,10 @@ async function fetchPrayerTimes(forceRefresh = false) {
         const cached = localStorage.getItem("prayerTimesData");
         const cachedDate = localStorage.getItem("prayerTimesDate");
         const cachedMethod = localStorage.getItem("prayerTimesMethod");
+        const cachedAsr = localStorage.getItem("asrMethod");
         const today = new Date().toDateString();
 
-        if (cached && cachedDate === today && cachedMethod === calcMethod) {
+        if (cached && cachedDate === today && cachedMethod === calcMethod && cachedAsr === asrMethod) {
             prayerTimes = JSON.parse(cached);
             renderPrayerTimes(prayerTimes);
             return;
@@ -759,24 +781,32 @@ async function fetchPrayerTimes(forceRefresh = false) {
     }
 
     if (navigator.geolocation) {
-        document.getElementById("location-name").innerText = lang === 'ar' ? "جاري تحديد الموقع..." : "Locating...";
+        document.getElementById("location-name").innerText = lang === 'ar' ? "جاري تحديد الموقع بدقة..." : "Locating precisely...";
+
+        const options = {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+        };
+
         navigator.geolocation.getCurrentPosition(async (position) => {
             const lat = position.coords.latitude;
             const lng = position.coords.longitude;
             const date = new Date();
 
             try {
-                // Fetch today's timings with selected method
-                const response = await fetch(`https://api.aladhan.com/v1/timings/\${Math.floor(date.getTime() / 1000)}?latitude=\${lat}&longitude=\${lng}&method=\${calcMethod}`);
+                // Fetch today's timings with selected method and school (Asr)
+                const response = await fetch(`https://api.aladhan.com/v1/timings/${Math.floor(date.getTime() / 1000)}?latitude=${lat}&longitude=${lng}&method=${calcMethod}&school=${asrMethod}`);
                 const data = await response.json();
 
                 prayerTimes = data.data;
                 localStorage.setItem("prayerTimesData", JSON.stringify(prayerTimes));
                 localStorage.setItem("prayerTimesDate", new Date().toDateString());
                 localStorage.setItem("prayerTimesMethod", calcMethod);
+                localStorage.setItem("asrMethod", asrMethod);
 
                 // Get Location Name override if possible, otherwise coords
-                document.getElementById("location-name").innerText = `Lat: \${lat.toFixed(2)}, Lon: \${lng.toFixed(2)}`;
+                document.getElementById("location-name").innerText = `Lat: ${lat.toFixed(4)}, Lon: ${lng.toFixed(4)}`;
 
                 renderPrayerTimes(prayerTimes);
             } catch (error) {
@@ -787,7 +817,7 @@ async function fetchPrayerTimes(forceRefresh = false) {
             console.error(error);
             if (container) container.innerHTML = '<p style="text-align:center; color:#ef4444;">يرجى تفعيل خدمة الموقع</p>';
             document.getElementById("location-name").innerText = "الموقع غير مفعل";
-        });
+        }, options);
     } else {
         alert("Geolocation is not supported by this browser.");
     }
@@ -844,6 +874,44 @@ function initSettings() {
     applyFontSize();
     const haEl = document.getElementById("hijri-adj-value");
     if (haEl) haEl.innerText = (hijriAdjustment > 0 ? "+" : "") + hijriAdjustment;
+
+    if (document.getElementById("night-mode-toggle")) {
+        document.getElementById("night-mode-toggle").checked = isNightMode;
+    }
+
+    // Init Calc Method
+    if (document.getElementById("calc-method")) {
+        document.getElementById("calc-method").value = calcMethod;
+    }
+    // Init Asr Method
+    if (document.getElementById("asr-method")) {
+        document.getElementById("asr-method").value = asrMethod;
+    }
+}
+
+function saveSettings() {
+    isNightMode = document.getElementById("night-mode-toggle").checked;
+    setTheme(isNightMode);
+
+    // Save Calc Method
+    const newMethod = document.getElementById("calc-method").value;
+    const newAsr = document.getElementById("asr-method").value;
+
+    let needRefresh = false;
+    if (newMethod !== calcMethod || newAsr !== asrMethod) {
+        calcMethod = newMethod;
+        asrMethod = newAsr;
+        needRefresh = true;
+    }
+
+    localStorage.setItem("prayerTimesMethod", calcMethod);
+    localStorage.setItem("asrMethod", asrMethod);
+
+    if (needRefresh) {
+        fetchPrayerTimes(true);
+    }
+
+    showToast(texts[lang].done, lang === 'ar' ? "تم حفظ الإعدادات" : "Settings saved");
 }
 
 // Update renderPrayerTimes to include Hijri Adjustment
@@ -860,8 +928,8 @@ function renderPrayerTimes(data) {
     } catch (e) { console.log("Date adj error", e); }
 
     // Update Date
-    document.getElementById("hijri-date").innerText = `\${hijri.day} \${hijri.month.ar} \${hijri.year}`;
-    document.getElementById("gregorian-date").innerText = `\${gregorian.weekday.en}, \${gregorian.day} \${gregorian.month.en} \${gregorian.year}`;
+    document.getElementById("hijri-date").innerText = `${hijri.day} ${hijri.month.ar} ${hijri.year}`;
+    document.getElementById("gregorian-date").innerText = `${gregorian.weekday.en}, ${gregorian.day} ${gregorian.month.en} ${gregorian.year}`;
 
     // prayers to show
     // Added Sunrise and Icons
@@ -886,7 +954,7 @@ function renderPrayerTimes(data) {
         const timeStr = timings[p.key]; // "05:30"
         const div = document.createElement("div");
         div.className = "prayer-item";
-        div.id = `prayer-\${p.key}`;
+        div.id = `prayer-${p.key}`;
 
         // Convert Prayer Time to Date Object for comparison
         const [hours, minutes] = timeStr.split(':').map(Number);
@@ -905,15 +973,15 @@ function renderPrayerTimes(data) {
         }
 
         // Format time to 12h
-        const time12 = new Date(`1/1/2000 \${timeStr}`).toLocaleTimeString(lang === 'ar' ? 'ar-SA' : 'en-US', { hour: 'numeric', minute: '2-digit' });
+        const time12 = new Date(`1/1/2000 ${timeStr}`).toLocaleTimeString(lang === 'ar' ? 'ar-SA' : 'en-US', { hour: 'numeric', minute: '2-digit' });
 
         div.innerHTML = `
             <div class="prayer-name" style="display:flex; align-items:center; gap:0.5rem;">
-                <i class="ph \${p.icon}" style="font-size:1.2rem; color:var(--primary-color);"></i>
-                \${isActive ? '<span class="next-badge">' + (lang === 'ar' ? 'القادمة' : 'Next') + '</span>' : ''}
-                \${lang === 'ar' ? p.ar : p.en}
+                <i class="ph ${p.icon}" style="font-size:1.2rem; color:var(--primary-color);"></i>
+                ${isActive ? '<span class="next-badge">' + (lang === 'ar' ? 'القادمة' : 'Next') + '</span>' : ''}
+                ${lang === 'ar' ? p.ar : p.en}
             </div>
-            <div class="prayer-time">\${time12}</div>
+            <div class="prayer-time">${time12}</div>
         `;
         container.appendChild(div);
     });
@@ -963,10 +1031,10 @@ function startPrayerCountdown(targetDate) {
         const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
         const seconds = Math.floor((diff % (1000 * 60)) / 1000);
 
-        const str = `\${hours.toString().padStart(2, '0')}:\${minutes.toString().padStart(2, '0')}:\${seconds.toString().padStart(2, '0')}`;
+        const str = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 
         const homeEl = document.getElementById("prayer-countdown-home");
-        if (homeEl) homeEl.innerText = `- \${str}`;
+        if (homeEl) homeEl.innerText = `- ${str}`;
 
         // Hero Update
         const heroCount = document.getElementById("prayer-countdown-hero");
@@ -989,7 +1057,7 @@ function scheduleNotifications(timings) {
 
     window.prayerNotificationInterval = setInterval(() => {
         const now = new Date();
-        const currentTime = `\${now.getHours().toString().padStart(2, '0')}:\${now.getMinutes().toString().padStart(2, '0')}`;
+        const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
         // Prayer names map (English keys from API)
         const prayerNamesConfig = {
@@ -1007,7 +1075,7 @@ function scheduleNotifications(timings) {
             if (currentTime === prayerTime && now.getSeconds() < 2) {
                 const pName = lang === 'ar' ? val.ar : val.en;
                 new Notification(lang === 'ar' ? "حان الآن موعد الصلاة" : "Prayer Time", {
-                    body: lang === 'ar' ? `حان الآن موعد صلاة \${pName}` : `It is time for \${pName} prayer`,
+                    body: lang === 'ar' ? `حان الآن موعد صلاة ${pName}` : `It is time for ${pName} prayer`,
                     icon: "icon-192.png"
                 });
                 playAudio(); // Create a dedicated adhan sound function ideally
@@ -1048,6 +1116,12 @@ function initQibla() {
     if (statusEl) statusEl.innerText = texts[lang].calibrating;
 
     if (navigator.geolocation) {
+        const options = {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+        };
+
         navigator.geolocation.getCurrentPosition((position) => {
             const lat = position.coords.latitude;
             const lng = position.coords.longitude;
@@ -1061,7 +1135,7 @@ function initQibla() {
             console.error(error);
             if (statusEl) statusEl.innerText = lang === 'ar' ? "تعذر تحديد الموقع" : "Location unavailable";
             alert(lang === 'ar' ? "يرجى تفعيل خدمة الموقع" : "Please enable location services.");
-        });
+        }, options);
     } else {
         alert("Geolocation not supported.");
     }
@@ -1113,6 +1187,9 @@ function handleOrientation(event) {
     const dial = document.getElementById("compass-dial");
     const pointer = document.getElementById("qibla-pointer");
     const degDisplay = document.getElementById("qibla-deg");
+
+    // Smooth transition handles filtering roughly, but let's ensure we don't flip 360->0 poorly
+    // For now, rely on CSS transition
 
     if (dial) dial.style.transform = `rotate(${-alpha}deg)`;
     if (pointer) pointer.style.transform = `translate(-50%, -100%) rotate(${qiblaDirection}deg)`;
