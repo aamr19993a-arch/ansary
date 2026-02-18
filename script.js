@@ -761,6 +761,35 @@ function initCalcMethodSelect() {
     }
 }
 
+// Geolocation Helper
+function getUserLocation() {
+    return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+            reject(new Error("Geolocation not supported"));
+            return;
+        }
+
+        const options = {
+            enableHighAccuracy: true,
+            timeout: 15000, // Increased timeout for mobile
+            maximumAge: 0
+        };
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                resolve({
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude
+                });
+            },
+            (error) => {
+                reject(error);
+            },
+            options
+        );
+    });
+}
+
 async function fetchPrayerTimes(forceRefresh = false) {
     const container = document.getElementById("prayer-times-list");
     if (container) container.innerHTML = '<div class="splash-loader" style="margin: 2rem auto;"></div>';
@@ -780,46 +809,53 @@ async function fetchPrayerTimes(forceRefresh = false) {
         }
     }
 
-    if (navigator.geolocation) {
-        document.getElementById("location-name").innerText = lang === 'ar' ? "جاري تحديد الموقع بدقة..." : "Locating precisely...";
+    try {
+        document.getElementById("location-name").innerText = lang === 'ar' ? "جاري تحديد الموقع..." : "Locating...";
 
-        const options = {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 0
-        };
+        const coords = await getUserLocation();
+        const date = new Date();
 
-        navigator.geolocation.getCurrentPosition(async (position) => {
-            const lat = position.coords.latitude;
-            const lng = position.coords.longitude;
-            const date = new Date();
+        // Fetch today's timings
+        const response = await fetch(`https://api.aladhan.com/v1/timings/${Math.floor(date.getTime() / 1000)}?latitude=${coords.lat}&longitude=${coords.lng}&method=${calcMethod}&school=${asrMethod}`);
+        const data = await response.json();
 
-            try {
-                // Fetch today's timings with selected method and school (Asr)
-                const response = await fetch(`https://api.aladhan.com/v1/timings/${Math.floor(date.getTime() / 1000)}?latitude=${lat}&longitude=${lng}&method=${calcMethod}&school=${asrMethod}`);
-                const data = await response.json();
+        prayerTimes = data.data;
+        localStorage.setItem("prayerTimesData", JSON.stringify(prayerTimes));
+        localStorage.setItem("prayerTimesDate", new Date().toDateString());
+        localStorage.setItem("prayerTimesMethod", calcMethod);
+        localStorage.setItem("asrMethod", asrMethod);
 
-                prayerTimes = data.data;
-                localStorage.setItem("prayerTimesData", JSON.stringify(prayerTimes));
-                localStorage.setItem("prayerTimesDate", new Date().toDateString());
-                localStorage.setItem("prayerTimesMethod", calcMethod);
-                localStorage.setItem("asrMethod", asrMethod);
+        // Update Location Name
+        document.getElementById("location-name").innerText = `Lat: ${coords.lat.toFixed(4)}, Lon: ${coords.lng.toFixed(4)}`;
 
-                // Get Location Name override if possible, otherwise coords
-                document.getElementById("location-name").innerText = `Lat: ${lat.toFixed(4)}, Lon: ${lng.toFixed(4)}`;
+        renderPrayerTimes(prayerTimes);
 
-                renderPrayerTimes(prayerTimes);
-            } catch (error) {
-                console.error(error);
-                if (container) container.innerHTML = '<p style="text-align:center; color:#ef4444;">فشل تحديث المواقيت</p>';
-            }
-        }, (error) => {
-            console.error(error);
-            if (container) container.innerHTML = '<p style="text-align:center; color:#ef4444;">يرجى تفعيل خدمة الموقع</p>';
-            document.getElementById("location-name").innerText = "الموقع غير مفعل";
-        }, options);
-    } else {
-        alert("Geolocation is not supported by this browser.");
+    } catch (error) {
+        console.error("Prayer Times Error:", error);
+
+        // Better Error UI
+        let errorMsg = lang === 'ar' ? "فشل تحديد الموقع أو الاتصال" : "Location or Network Error";
+        let actionBtn = `<button onclick="fetchPrayerTimes(true)" class="main-btn" style="margin-top:1rem; padding:0.5rem 1.5rem; border-radius:var(--radius-full); background:var(--primary-color); color:white;">${lang === 'ar' ? 'إعادة المحاولة' : 'Retry'}</button>`;
+
+        if (error.code === 1) { // Permission Denied
+            errorMsg = lang === 'ar' ? "تم رفض إذن الموقع. يرجى تفعيله من إعدادات المتصفح." : "Location permission denied. Please enable it in browser settings.";
+            actionBtn = ""; // Can't retry if denied, user must fix settings
+        } else if (error.code === 2) { // Position Unavailable
+            errorMsg = lang === 'ar' ? "تعذر تحديد الموقع بدقة." : "Location unavailable.";
+        } else if (error.code === 3) { // Timeout
+            errorMsg = lang === 'ar' ? "انتهت مهلة تحديد الموقع." : "Location request timed out.";
+        }
+
+        if (container) {
+            container.innerHTML = `
+                <div style="text-align:center; padding:2rem; color:var(--text-secondary);">
+                    <i class="ph ph-warning-circle" style="font-size:3rem; color:var(--danger-color); margin-bottom:1rem;"></i>
+                    <p style="margin-bottom:1rem;">${errorMsg}</p>
+                    ${actionBtn}
+                </div>
+            `;
+        }
+        document.getElementById("location-name").innerText = lang === 'ar' ? "خطأ في الموقع" : "Location Error";
     }
 }
 
@@ -1105,39 +1141,44 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // Qibla Compass Logic
 let qiblaDirection = 0;
+let compassSensor = null;
 
 function initQiblaView() {
     showView('qibla');
     initQibla();
 }
 
-function initQibla() {
+async function initQibla() {
     const statusEl = document.getElementById("qibla-status");
+    const degDisplay = document.getElementById("qibla-deg");
+
     if (statusEl) statusEl.innerText = texts[lang].calibrating;
 
-    if (navigator.geolocation) {
-        const options = {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 0
-        };
+    try {
+        const coords = await getUserLocation();
 
-        navigator.geolocation.getCurrentPosition((position) => {
-            const lat = position.coords.latitude;
-            const lng = position.coords.longitude;
+        qiblaDirection = calculateQibla(coords.lat, coords.lng);
 
-            qiblaDirection = calculateQibla(lat, lng);
-            if (statusEl) statusEl.innerText = lang === 'ar' ? `القبلة: ${Math.round(qiblaDirection)}°` : `Qibla: ${Math.round(qiblaDirection)}°`;
+        if (statusEl) statusEl.innerText = lang === 'ar' ? `القبلة: ${Math.round(qiblaDirection)}°` : `Qibla: ${Math.round(qiblaDirection)}°`;
+        if (degDisplay) degDisplay.innerText = `${Math.round(qiblaDirection)}°`;
 
-            startCompass();
+        // Start Compass after location is found
+        startCompass();
 
-        }, (error) => {
-            console.error(error);
-            if (statusEl) statusEl.innerText = lang === 'ar' ? "تعذر تحديد الموقع" : "Location unavailable";
-            alert(lang === 'ar' ? "يرجى تفعيل خدمة الموقع" : "Please enable location services.");
-        }, options);
-    } else {
-        alert("Geolocation not supported.");
+    } catch (error) {
+        console.error("Qibla Location Error:", error);
+        let msg = lang === 'ar' ? "تعذر تحديد الموقع" : "Location unavailable";
+        if (error.code === 1) msg = lang === 'ar' ? "يرجى تفعيل الموقع" : "Enable Location";
+
+        if (statusEl) statusEl.innerText = msg;
+
+        // Show manual retry button in the degree area if failed
+        const compassContainer = document.querySelector(".compass-container");
+        if (compassContainer) {
+            // Provide visual feedback inside the compass or below it
+            // For now, we rely on the generic retry button or toast
+            showToast("Error", msg);
+        }
     }
 }
 
@@ -1157,23 +1198,64 @@ function calculateQibla(lat, lng) {
 }
 
 function startCompass() {
-    if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        document.getElementById("calibration-msg").style.display = "block";
-        document.getElementById("calibration-msg").onclick = () => {
-            DeviceOrientationEvent.requestPermission()
-                .then(response => {
-                    if (response === 'granted') {
-                        document.getElementById("calibration-msg").style.display = "none";
-                        window.addEventListener('deviceorientation', handleOrientation);
-                    } else {
-                        alert("Permission denied");
-                    }
-                })
-                .catch(console.error);
-        };
+    // iOS 13+ support
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        // Show specific permission button for iOS
+        const calibrationMsg = document.getElementById("calibration-msg");
+        if (calibrationMsg) {
+            calibrationMsg.style.display = "block";
+            calibrationMsg.innerHTML = `
+                <i class="ph ph-compass" style="font-size: 2rem; color: var(--primary-color);"></i>
+                <p style="font-size: 0.9rem; margin-top: 0.5rem; margin-bottom: 1rem;">
+                    ${lang === 'ar' ? 'السماح باستخدام البوصلة' : 'Enable Compass'}
+                </p>
+                <button id="ios-compass-btn" class="main-btn" style="padding:0.5rem 1rem; border-radius:var(--radius-full); background:var(--primary-color); color:white;">
+                    ${lang === 'ar' ? 'تفعيل' : 'Enable'}
+                </button>
+            `;
+
+            // Allow clicking the whole box or just the button
+            const btn = document.getElementById("ios-compass-btn");
+            if (btn) {
+                btn.onclick = requestCompassPermission;
+            }
+            calibrationMsg.onclick = (e) => {
+                // If they clicked the button, don't double trigger (though requestPermission is fine)
+                if (e.target !== btn) requestCompassPermission();
+            };
+        }
     } else {
+        // Non-iOS or older devices
         window.addEventListener('deviceorientationabsolute', handleOrientation, true);
         window.addEventListener('deviceorientation', handleOrientation, true);
+
+        // Show calibration message briefly then hide
+        const calibrationMsg = document.getElementById("calibration-msg");
+        if (calibrationMsg) {
+            calibrationMsg.style.display = "block";
+            calibrationMsg.innerHTML = `
+                <i class="ph ph-infinity" style="font-size: 2rem; color: var(--primary-color);"></i>
+                <p style="font-size: 0.85rem; margin-top: 0.5rem;">${lang === 'ar' ? 'حرك الهاتف (8) للمعايرة' : 'Move phone in 8 figure'}</p>
+            `;
+            setTimeout(() => {
+                calibrationMsg.style.display = "none";
+            }, 5000);
+        }
+    }
+}
+
+function requestCompassPermission() {
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission()
+            .then(response => {
+                if (response === 'granted') {
+                    document.getElementById("calibration-msg").style.display = "none";
+                    window.addEventListener('deviceorientation', handleOrientation, true);
+                } else {
+                    alert(lang === 'ar' ? "تم رفض إذن البوصلة" : "Compass permission denied");
+                }
+            })
+            .catch(console.error);
     }
 }
 
