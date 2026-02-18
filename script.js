@@ -34,7 +34,9 @@ const texts = {
         save: "حفظ", morning: "أذكار الصباح", evening: "أذكار المساء", sleep: "أذكار النوم",
         wakeup: "الاستيقاظ", post_prayer: "بعد الصلاة", ramadan_before_iftar: "قبل الإفطار",
         ramadan_after_iftar: "بعد الإفطار", ramadan_night_qiyam: "صلاة القيام",
-        duas_kurb: "أدعية الكرب", done: "تقبل الله منك!"
+        duas_kurb: "أدعية الكرب", done: "تقبل الله منك!", enable_reminder: "تفعيل التنبيهات",
+        quiet_hours: "ساعات الهدوء", quick_options: "خيارات سريعة", remind_every: "ذكرني كل:",
+        qibla: "القبلة", qibla_direction: "اتجاه القبلة", calibrating: "جاري المعايرة...", qibla_deg: "درجة القبلة من الشمال", recalibrate: "إعادة معايرة"
     },
     en: {
         app: "Ansari", home: "Home", tasbeeh: "Tasbeeh", favorites: "Favorites", settings: "Settings",
@@ -42,7 +44,9 @@ const texts = {
         save: "Save", morning: "Morning", evening: "Evening", sleep: "Sleep",
         wakeup: "Wake-up", post_prayer: "Post-Prayer", ramadan_before_iftar: "Before Iftar",
         ramadan_after_iftar: "After Iftar", ramadan_night_qiyam: "Night Prayer",
-        duas_kurb: "Distress Duas", done: "May Allah accept!"
+        duas_kurb: "Distress Duas", done: "May Allah accept!", enable_reminder: "Enable Notifications",
+        quiet_hours: "Quiet Hours", quick_options: "Quick Options", remind_every: "Remind every:",
+        qibla: "Qibla", qibla_direction: "Qibla Direction", calibrating: "Calibrating...", qibla_deg: "Qibla Degrees from North", recalibrate: "Recalibrate"
     }
 };
 
@@ -62,8 +66,9 @@ function applyLanguage() {
         "nav-label-home": t.home, "nav-label-tasbeeh": t.tasbeeh,
         "nav-label-favorites": t.favorites, "nav-label-settings": t.settings,
         "settings-title": t.settings, "label-night-mode": t.nightMode,
-        "label-language": t.language, "label-reminders": t.reminders,
-        "current-lang-text": t.currentLang, "app-subtitle": lang === "ar" ? "رفيقك في الذكر" : "Your Dhikr Companion"
+        "label-language": t.language, "label-reminders": t.reminders, "label-enable-reminder": t.enable_reminder,
+        "current-lang-text": t.currentLang, "app-subtitle": lang === "ar" ? "رفيقك في الذكر" : "Your Dhikr Companion",
+        "nav-label-qibla": t.qibla
     };
 
     for (const [id, text] of Object.entries(mappings)) {
@@ -258,6 +263,265 @@ function resetRamadanList() {
     }
 }
 
+// Quran Logic
+let allSurahs = [];
+
+async function openQuranList() {
+    showView('quran-list');
+    if (allSurahs.length === 0) {
+        const container = document.getElementById("surah-list-container");
+        container.innerHTML = '<div style="text-align:center; padding:2rem;"><div class="splash-loader" style="margin:0 auto;"></div><p style="margin-top:1rem;">جاري تحميل قائمة السور...</p></div>';
+
+        try {
+            const response = await fetch('https://api.alquran.cloud/v1/surah');
+            const data = await response.json();
+            allSurahs = data.data;
+            renderSurahList(allSurahs);
+        } catch (error) {
+            container.innerHTML = '<p style="text-align:center; color:#ef4444; padding:2rem;">فشل تحميل قائمة السور. يرجى التأكد من الاتصال بالإنترنت.</p>';
+        }
+    }
+}
+
+function renderSurahList(surahs) {
+    const container = document.getElementById("surah-list-container");
+    container.innerHTML = "";
+    surahs.forEach(surah => {
+        const div = document.createElement("div");
+        div.className = "category-card";
+        div.style.flexDirection = "row";
+        div.style.justifyContent = "space-between";
+        div.style.padding = "1.25rem 1.5rem";
+        div.style.width = "100%";
+        div.onclick = () => openSurah(surah.number, surah.name);
+
+        div.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <span style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: var(--primary-light); color: var(--primary-color); border-radius: 50%; font-weight: 800; font-size: 0.9rem;">${surah.number}</span>
+                <div style="text-align: right;">
+                    <h3 class="category-title" style="margin: 0; font-size: 1.1rem;">${surah.name}</h3>
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0;">${surah.englishName} • ${surah.numberOfAyahs} آية</p>
+                </div>
+            </div>
+            <i class="ph ph-caret-left" style="color: var(--text-secondary);"></i>
+        `;
+        container.appendChild(div);
+    });
+}
+
+function filterSurahs() {
+    const term = document.getElementById("quran-search").value.toLowerCase();
+    const filtered = allSurahs.filter(s =>
+        s.name.includes(term) ||
+        s.englishName.toLowerCase().includes(term) ||
+        s.number.toString() === term
+    );
+    renderSurahList(filtered);
+}
+
+let readingMode = 'vertical'; // 'vertical' | 'horizontal'
+let showTafseer = false;
+let currentSurahData = null; // Store fetched data
+let currentSurahNumber = 1;
+
+async function openSurah(number, name) {
+    showView('quran-read');
+    document.getElementById("surah-read-title").innerText = name;
+    currentSurahNumber = number; // Update state
+    const container = document.getElementById("surah-content");
+    container.innerHTML = '<div style="text-align:center; padding:2rem;"><div class="splash-loader" style="margin:0 auto;"></div><p style="margin-top:1rem;">جاري تحميل الآيات والتفسير...</p></div>';
+
+    try {
+        // Fetch Quran and Tafseer (Al-Muyassar) in one go
+        const response = await fetch(`https://api.alquran.cloud/v1/surah/${number}/editions/quran-uthmani,ar.muyassar`);
+        const data = await response.json();
+
+        // Organize data: edition[0] is Quran, edition[1] is Tafseer
+        const quranAyahs = data.data[0].ayahs;
+        const tafseerAyahs = data.data[1].ayahs;
+
+        // Merge them
+        currentSurahData = quranAyahs.map((ayah, i) => ({
+            ...ayah,
+            tafseer: tafseerAyahs[i].text
+        }));
+
+        renderSurah(currentSurahData, number);
+    } catch (error) {
+        console.error(error);
+        container.innerHTML = '<p style="text-align:center; color:#ef4444; padding:2rem;">فشل تحميل السورة. يرجى التأكد من الاتصال بالإنترنت.</p>';
+    }
+}
+
+function renderSurah(ayahs, surahNumber) {
+    const container = document.getElementById("surah-content");
+
+    // Apply Reading Mode Class
+    if (readingMode === 'horizontal') {
+        container.classList.remove('quran-page-frame');
+        container.classList.add('quran-read-horizontal');
+    } else {
+        container.classList.add('quran-page-frame'); // Add decoration in vertical mode
+        container.classList.remove('quran-read-horizontal');
+    }
+
+    let html = "";
+
+    // Add Basmala logic
+    // Add Basmala for all Surahs except At-Tawbah (9) and Al-Fatiha (1) (since Fatiha usually includes it as ayah 1)
+    // Actually API for quran-uthmani usually has Bismillah as Ayah 1 for Fatiha.
+    // For others, we need to add it manually if it's not part of the text.
+    if (surahNumber !== 9 && surahNumber !== 1 && readingMode === 'vertical') {
+        html += `
+            <div class="basmala-container">
+                <p class="dhikr-arabic" style="font-size: 1.5rem;">بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ</p>
+            </div>
+        `;
+    }
+
+    if (readingMode === 'vertical') {
+        // Vertical Mode: Standard Text Block
+        ayahs.forEach((ayah) => {
+            html += `<span class="ayah-container" onclick="toggleSingleTafseer(${ayah.numberInSurah})">
+                <span class="ayah-text">${ayah.text}</span> 
+                <span class="ayah-number">${ayah.numberInSurah}</span>
+                <div id="tafseer-${ayah.numberInSurah}" class="tafseer-box ${showTafseer ? 'active' : ''}">${ayah.tafseer}</div>
+            </span> `;
+        });
+    } else {
+        // Horizontal Mode: Cards
+        ayahs.forEach((ayah) => {
+            html += `
+                <div class="ayah-card">
+                    <div style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; width:100%;">
+                        <p class="ayah-text" style="font-size: 1.8rem; line-height: 2;">${ayah.text}</p>
+                        <div class="ayah-number" style="margin-top:1rem;">${ayah.numberInSurah}</div>
+                    </div>
+                    <div class="tafseer-box ${showTafseer ? 'active' : ''}" style="width:100%; max-height: 150px; overflow-y: auto;">
+                        ${ayah.tafseer}
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    container.innerHTML = html;
+
+    // Reset Scroll
+    if (readingMode === 'vertical') window.scrollTo(0, 0);
+    else container.scrollLeft = container.scrollWidth; // Start from right (RTL)
+}
+
+// Auto Scroll Logic
+let autoScrollInterval = null;
+let isAutoScrolling = false;
+let scrollSpeed = 1; // 1, 1.5, 2
+
+function toggleAutoScroll() {
+    if (isAutoScrolling) {
+        stopAutoScroll();
+    } else {
+        startAutoScroll();
+    }
+}
+
+function startAutoScroll() {
+    if (isAutoScrolling) return;
+    isAutoScrolling = true;
+
+    const btn = document.getElementById('btn-auto-scroll');
+    btn.classList.add('active');
+    btn.querySelector('i').className = "ph ph-pause";
+
+    // Disable sleep prevention would go here if we had a plugin for it
+
+    if (readingMode === 'vertical') {
+        const intervalTime = 50 / scrollSpeed; // Base 50ms. 2x = 25ms
+        autoScrollInterval = setInterval(() => {
+            window.scrollBy(0, 1);
+            // Check if reached bottom
+            if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight) {
+                stopAutoScroll();
+            }
+        }, intervalTime);
+    } else {
+        // Horizontal Mode: Flip every N seconds
+        const baseDelay = 6000; // 6 seconds base for a card
+        const delay = baseDelay / scrollSpeed;
+
+        autoScrollInterval = setInterval(() => {
+            const container = document.getElementById("surah-content");
+            const cardWidth = container.offsetWidth; // approximate
+            // If strictly snap, we can just scrollBy width
+            container.scrollBy({ left: -cardWidth, behavior: 'smooth' }); // RTL: negative left
+
+            // Check boundaries
+            if (Math.abs(container.scrollLeft) >= (container.scrollWidth - container.clientWidth - 10)) {
+                stopAutoScroll();
+            }
+        }, delay);
+    }
+}
+
+function stopAutoScroll() {
+    isAutoScrolling = false;
+    clearInterval(autoScrollInterval);
+    const btn = document.getElementById('btn-auto-scroll');
+    if (btn) {
+        btn.classList.remove('active');
+        btn.querySelector('i').className = "ph ph-play";
+    }
+}
+
+function updateScrollSpeed() {
+    scrollSpeed = parseFloat(document.getElementById('scroll-speed').value);
+    if (isAutoScrolling) {
+        stopAutoScroll();
+        startAutoScroll(); // Restart with new speed
+    }
+}
+
+// Modify toggleReadingMode to stop scroll
+function toggleReadingMode() {
+    stopAutoScroll(); // Stop logic
+
+    readingMode = readingMode === 'vertical' ? 'horizontal' : 'vertical';
+    const btn = document.getElementById('btn-reading-mode');
+    if (readingMode === 'horizontal') {
+        btn.classList.add('active');
+        btn.querySelector('i').className = "ph ph-arrows-out-line-vertical";
+    } else {
+        btn.classList.remove('active');
+        btn.querySelector('i').className = "ph ph-arrows-out-line-horizontal";
+    }
+
+    // Re-render if data exists
+    if (currentSurahData) {
+        renderSurah(currentSurahData, currentSurahNumber);
+    }
+}
+
+function toggleTafseerVisibility() {
+    showTafseer = !showTafseer;
+    const btn = document.getElementById('btn-tafseer');
+    btn.classList.toggle('active', showTafseer);
+
+    document.querySelectorAll('.tafseer-box').forEach(el => {
+        if (showTafseer) el.classList.add('active');
+        else el.classList.remove('active');
+    });
+}
+
+function toggleSingleTafseer(ayahNum) {
+    if (showTafseer) return; // If global tafseer is on, ignore individual toggle
+    const el = document.getElementById(`tafseer-${ayahNum}`);
+    if (el) el.classList.toggle('active');
+}
+
+function scrollToTop() {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 // Helpers
 function hapticFeedback(pattern) {
     if (navigator.vibrate) navigator.vibrate(pattern);
@@ -269,12 +533,487 @@ function playAudio() {
     else alert(lang === 'ar' ? "الصوت غير متوفر" : "Audio unavailable");
 }
 
-function saveReminder() {
-    const time = document.getElementById("reminder-time").value;
-    if (time) {
-        localStorage.setItem("reminderTime", time);
+// Reminder Interval Logic
+let reminderInterval = JSON.parse(localStorage.getItem("reminderInterval")) || { hours: 0, minutes: 30 };
+let reminderEnabled = localStorage.getItem("reminderEnabled") === "true";
+let quietHoursEnabled = localStorage.getItem("quietHoursEnabled") === "true";
+let quietStart = localStorage.getItem("quietStart") || "23:00";
+let quietEnd = localStorage.getItem("quietEnd") || "05:00";
+
+let lastRemindedTime = parseInt(localStorage.getItem("lastRemindedTime")) || Date.now();
+let reminderLoopInterval = null;
+
+function initReminders() {
+    const toggle = document.getElementById("reminder-toggle");
+    const hoursInput = document.getElementById("reminder-hours");
+    const minsInput = document.getElementById("reminder-minutes");
+    const quietToggle = document.getElementById("quiet-toggle");
+    const quietStartInput = document.getElementById("quiet-start");
+    const quietEndInput = document.getElementById("quiet-end");
+
+    if (toggle) {
+        toggle.checked = reminderEnabled;
+        toggleReminder(reminderEnabled);
+    }
+    if (hoursInput) hoursInput.value = reminderInterval.hours;
+    if (minsInput) minsInput.value = reminderInterval.minutes;
+
+    if (quietToggle) {
+        quietToggle.checked = quietHoursEnabled;
+        toggleQuietHours(quietHoursEnabled);
+    }
+    if (quietStartInput) quietStartInput.value = quietStart;
+    if (quietEndInput) quietEndInput.value = quietEnd;
+
+    if (reminderEnabled) startReminderLoop();
+}
+
+function setReminderPreset(h, m) {
+    document.getElementById("reminder-hours").value = h;
+    document.getElementById("reminder-minutes").value = m;
+    hapticFeedback(30);
+}
+
+function toggleReminder(checked) {
+    const settingsDiv = document.getElementById("reminder-settings");
+    reminderEnabled = checked;
+    localStorage.setItem("reminderEnabled", checked);
+    if (settingsDiv) settingsDiv.style.display = checked ? "flex" : "none";
+    if (checked) startReminderLoop();
+    else stopReminderLoop();
+}
+
+function toggleQuietHours(checked) {
+    const inputsDiv = document.getElementById("quiet-inputs");
+    quietHoursEnabled = checked;
+    localStorage.setItem("quietHoursEnabled", checked);
+    if (inputsDiv) inputsDiv.style.display = checked ? "flex" : "none";
+}
+
+function saveReminderSettings() {
+    const h = parseInt(document.getElementById("reminder-hours").value) || 0;
+    const m = parseInt(document.getElementById("reminder-minutes").value) || 1;
+
+    // Save Quiet Hours
+    quietStart = document.getElementById("quiet-start").value;
+    quietEnd = document.getElementById("quiet-end").value;
+    localStorage.setItem("quietStart", quietStart);
+    localStorage.setItem("quietEnd", quietEnd);
+
+    reminderInterval = { hours: h, minutes: m };
+    localStorage.setItem("reminderInterval", JSON.stringify(reminderInterval));
+
+    // Reset timer
+    lastRemindedTime = Date.now();
+    localStorage.setItem("lastRemindedTime", lastRemindedTime);
+
+    showToast(texts[lang].done, lang === 'ar' ? 'تم حفظ الإعدادات' : 'Settings saved');
+    stopReminderLoop();
+    startReminderLoop();
+}
+
+function startReminderLoop() {
+    if (reminderLoopInterval) clearInterval(reminderLoopInterval);
+    reminderLoopInterval = setInterval(() => {
+        const now = Date.now();
+        const intervalMs = ((reminderInterval.hours * 60) + reminderInterval.minutes) * 60 * 1000;
+
+        if (now - lastRemindedTime >= intervalMs) {
+            checkAndTriggerReminder();
+        }
+    }, 60000);
+}
+
+function stopReminderLoop() {
+    if (reminderLoopInterval) clearInterval(reminderLoopInterval);
+}
+
+function checkAndTriggerReminder() {
+    const now = new Date();
+
+    if (quietHoursEnabled) {
+        const currentMins = now.getHours() * 60 + now.getMinutes();
+        const startParts = quietStart.split(':');
+        const endParts = quietEnd.split(':');
+        const startMins = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
+        const endMins = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
+
+        let isQuiet = false;
+        if (startMins < endMins) {
+            // e.g. 14:00 to 16:00
+            if (currentMins >= startMins && currentMins < endMins) isQuiet = true;
+        } else {
+            // e.g. 23:00 to 05:00 (crosses midnight)
+            if (currentMins >= startMins || currentMins < endMins) isQuiet = true;
+        }
+
+        if (isQuiet) {
+            console.log("Quiet hours active, skipping reminder.");
+            return;
+        }
+    }
+
+    triggerReminder();
+    lastRemindedTime = Date.now();
+    localStorage.setItem("lastRemindedTime", lastRemindedTime);
+}
+
+function triggerReminder() {
+    // Pick a random dhikr title
+    const randomCat = azkarData[Math.floor(Math.random() * azkarData.length)];
+    const text = randomCat.items[0].ar;
+
+    // System Notification
+    if ("Notification" in window && Notification.permission === "granted") {
+        new Notification(lang === 'ar' ? "تذكير" : "Reminder", {
+            body: lang === 'ar' ? "حان وقت ذكر الله" : "Time to remember Allah",
+            icon: "icon-192.png",
+            tag: "dhikr-reminder"
+        });
+    }
+
+    // In-App Toast
+    showToast(lang === 'ar' ? "ذكر الله" : "Dhikr", text);
+
+    playAudio();
+}
+
+// Toast System
+function showToast(title, message) {
+    const container = document.getElementById("toast-container");
+    if (!container) return;
+
+    const toast = document.createElement("div");
+    toast.className = "toast";
+    toast.innerHTML = `
+        <div style="background:var(--primary-light); padding:0.5rem; border-radius:50%; color:var(--primary-color);">
+            <i class="ph ph-bell-ringing" style="font-size:1.2rem;"></i>
+        </div>
+        <div class="toast-content">
+            <div class="toast-title">\${title}</div>
+            <div class="toast-message">\${message}</div>
+        </div>
+    `;
+
+    container.appendChild(toast);
+    hapticFeedback(40);
+
+    setTimeout(() => {
+        toast.classList.add('hiding');
+        toast.addEventListener('animationend', () => toast.remove());
+    }, 4000);
+}
+
+document.getElementById("reminder-toggle")?.addEventListener('change', () => requestNotificationPermission());
+
+// Prayer Times Logic
+// Prayer Times Logic
+let prayerTimes = null;
+let nextPrayerTimeout = null;
+let notificationPermission = false;
+let calcMethod = localStorage.getItem("calcMethod") || "4"; // Default: Umm Al-Qura
+
+// Request Notification Permission on load (or user interaction)
+function requestNotificationPermission() {
+    if ("Notification" in window) {
+        Notification.requestPermission().then(permission => {
+            notificationPermission = permission === "granted";
+        });
+    }
+}
+
+function saveCalcMethod() {
+    const select = document.getElementById("calc-method-select");
+    if (select) {
+        calcMethod = select.value;
+        localStorage.setItem("calcMethod", calcMethod);
+        fetchPrayerTimes(true); // Refresh with new method
         alert(texts[lang].done);
     }
+}
+
+// Initialize Calc Method Select
+function initCalcMethodSelect() {
+    const select = document.getElementById("calc-method-select");
+    if (select) {
+        select.value = calcMethod;
+    }
+}
+
+async function fetchPrayerTimes(forceRefresh = false) {
+    const container = document.getElementById("prayer-times-list");
+    if (container) container.innerHTML = '<div class="splash-loader" style="margin: 2rem auto;"></div>';
+
+    if (!forceRefresh) {
+        // Try to load from localStorage first
+        const cached = localStorage.getItem("prayerTimesData");
+        const cachedDate = localStorage.getItem("prayerTimesDate");
+        const cachedMethod = localStorage.getItem("prayerTimesMethod");
+        const today = new Date().toDateString();
+
+        if (cached && cachedDate === today && cachedMethod === calcMethod) {
+            prayerTimes = JSON.parse(cached);
+            renderPrayerTimes(prayerTimes);
+            return;
+        }
+    }
+
+    if (navigator.geolocation) {
+        document.getElementById("location-name").innerText = lang === 'ar' ? "جاري تحديد الموقع..." : "Locating...";
+        navigator.geolocation.getCurrentPosition(async (position) => {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            const date = new Date();
+
+            try {
+                // Fetch today's timings with selected method
+                const response = await fetch(`https://api.aladhan.com/v1/timings/\${Math.floor(date.getTime() / 1000)}?latitude=\${lat}&longitude=\${lng}&method=\${calcMethod}`);
+                const data = await response.json();
+
+                prayerTimes = data.data;
+                localStorage.setItem("prayerTimesData", JSON.stringify(prayerTimes));
+                localStorage.setItem("prayerTimesDate", new Date().toDateString());
+                localStorage.setItem("prayerTimesMethod", calcMethod);
+
+                // Get Location Name override if possible, otherwise coords
+                document.getElementById("location-name").innerText = `Lat: \${lat.toFixed(2)}, Lon: \${lng.toFixed(2)}`;
+
+                renderPrayerTimes(prayerTimes);
+            } catch (error) {
+                console.error(error);
+                if (container) container.innerHTML = '<p style="text-align:center; color:#ef4444;">فشل تحديث المواقيت</p>';
+            }
+        }, (error) => {
+            console.error(error);
+            if (container) container.innerHTML = '<p style="text-align:center; color:#ef4444;">يرجى تفعيل خدمة الموقع</p>';
+            document.getElementById("location-name").innerText = "الموقع غير مفعل";
+        });
+    } else {
+        alert("Geolocation is not supported by this browser.");
+    }
+}
+
+// Customization Logic
+let fontSizeLevel = localStorage.getItem("fontSizeLevel") || "medium"; // small, medium, large
+let hijriAdjustment = parseInt(localStorage.getItem("hijriAdjustment")) || 0;
+
+function applyFontSize() {
+    const root = document.documentElement;
+    let dhikrSize, quranSize;
+
+    switch (fontSizeLevel) {
+        case 'small':
+            dhikrSize = "1.3rem";
+            quranSize = "1.2rem";
+            break;
+        case 'large':
+            dhikrSize = "2rem";
+            quranSize = "1.9rem";
+            break;
+        default: // medium
+            dhikrSize = "1.6rem";
+            quranSize = "1.5rem";
+            break;
+    }
+
+    root.style.setProperty('--font-size-dhikr', dhikrSize);
+    root.style.setProperty('--font-size-quran', quranSize);
+}
+
+function setFontSize(level) {
+    fontSizeLevel = level;
+    localStorage.setItem("fontSizeLevel", level);
+    applyFontSize();
+    hapticFeedback(40);
+}
+
+function adjustHijri(amount) {
+    hijriAdjustment += amount;
+    // Limit to +/- 2 days usually
+    if (hijriAdjustment > 2) hijriAdjustment = 2;
+    if (hijriAdjustment < -2) hijriAdjustment = -2;
+
+    localStorage.setItem("hijriAdjustment", hijriAdjustment);
+    document.getElementById("hijri-adj-value").innerText = (hijriAdjustment > 0 ? "+" : "") + hijriAdjustment;
+
+    // Refresh prayer times display to show new date
+    if (prayerTimes) renderPrayerTimes(prayerTimes);
+}
+
+function initSettings() {
+    applyFontSize();
+    const haEl = document.getElementById("hijri-adj-value");
+    if (haEl) haEl.innerText = (hijriAdjustment > 0 ? "+" : "") + hijriAdjustment;
+}
+
+// Update renderPrayerTimes to include Hijri Adjustment
+function renderPrayerTimes(data) {
+    const timings = data.timings;
+    const date = data.date;
+    let hijri = date.hijri;
+    const gregorian = date.gregorian;
+
+    // Apply Hijri Adjustment
+    try {
+        let adjustedDay = parseInt(hijri.day) + hijriAdjustment;
+        hijri.day = adjustedDay.toString();
+    } catch (e) { console.log("Date adj error", e); }
+
+    // Update Date
+    document.getElementById("hijri-date").innerText = `\${hijri.day} \${hijri.month.ar} \${hijri.year}`;
+    document.getElementById("gregorian-date").innerText = `\${gregorian.weekday.en}, \${gregorian.day} \${gregorian.month.en} \${gregorian.year}`;
+
+    // prayers to show
+    // Added Sunrise and Icons
+    const prayerConfig = [
+        { key: "Fajr", ar: "الفجر", en: "Fajr", icon: "ph-cloud-sun" },
+        { key: "Sunrise", ar: "الشروق", en: "Sunrise", icon: "ph-sun-horizon" },
+        { key: "Dhuhr", ar: "الظهر", en: "Dhuhr", icon: "ph-sun" },
+        { key: "Asr", ar: "العصر", en: "Asr", icon: "ph-sun-dim" },
+        { key: "Maghrib", ar: "المغرب", en: "Maghrib", icon: "ph-cloud-moon" },
+        { key: "Isha", ar: "العشاء", en: "Isha", icon: "ph-moon-stars" }
+    ];
+
+    const container = document.getElementById("prayer-times-list");
+    container.innerHTML = "";
+
+    const now = new Date();
+    let nextPrayerFound = false;
+    let nextPrayerName = "";
+    let nextPrayerTimeDate = null;
+
+    prayerConfig.forEach(p => {
+        const timeStr = timings[p.key]; // "05:30"
+        const div = document.createElement("div");
+        div.className = "prayer-item";
+        div.id = `prayer-\${p.key}`;
+
+        // Convert Prayer Time to Date Object for comparison
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        const prayerDate = new Date();
+        prayerDate.setHours(hours, minutes, 0, 0);
+
+        let isActive = false;
+
+        // Skip Sunrise for "Next Prayer" logic (usually we don't pray at sunrise)
+        if (p.key !== "Sunrise" && !nextPrayerFound && prayerDate > now) {
+            isActive = true;
+            nextPrayerFound = true;
+            nextPrayerName = lang === 'ar' ? p.ar : p.en;
+            nextPrayerTimeDate = prayerDate;
+            div.classList.add("active-prayer");
+        }
+
+        // Format time to 12h
+        const time12 = new Date(`1/1/2000 \${timeStr}`).toLocaleTimeString(lang === 'ar' ? 'ar-SA' : 'en-US', { hour: 'numeric', minute: '2-digit' });
+
+        div.innerHTML = `
+            <div class="prayer-name" style="display:flex; align-items:center; gap:0.5rem;">
+                <i class="ph \${p.icon}" style="font-size:1.2rem; color:var(--primary-color);"></i>
+                \${isActive ? '<span class="next-badge">' + (lang === 'ar' ? 'القادمة' : 'Next') + '</span>' : ''}
+                \${lang === 'ar' ? p.ar : p.en}
+            </div>
+            <div class="prayer-time">\${time12}</div>
+        `;
+        container.appendChild(div);
+    });
+
+    // if all prayers passed (after Isha), next is Fajr tomorrow
+    if (!nextPrayerFound) {
+        nextPrayerName = lang === 'ar' ? "الفجر" : "Fajr";
+        // Logic for tomorrow's Fajr would be complex without full data, 
+        // we can just say "غداً" or fetch tomorrow's data. 
+        // For simplicity, we just leave it or handle basic midnight case.
+        document.getElementById("next-prayer-time-home").innerText = "--:--";
+        if (nextPrayerTimeout) clearInterval(nextPrayerTimeout);
+    }
+
+    // Update Home Widget & Hero
+    if (nextPrayerFound) {
+        // Home Widget
+        document.getElementById("next-prayer-name-home").innerText = nextPrayerName;
+        document.getElementById("next-prayer-time-home").innerText = nextPrayerTimeDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        // Prayer View Hero
+        const heroName = document.getElementById("next-prayer-name-hero");
+        const heroTime = document.getElementById("next-prayer-time-hero");
+        if (heroName) heroName.innerText = nextPrayerName;
+        if (heroTime) heroTime.innerText = nextPrayerTimeDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        startPrayerCountdown(nextPrayerTimeDate);
+        scheduleNotifications(timings);
+    }
+}
+
+function startPrayerCountdown(targetDate) {
+    if (nextPrayerTimeout) clearInterval(nextPrayerTimeout);
+
+    function update() {
+        const now = new Date();
+        const diff = targetDate - now;
+
+        if (diff <= 0) {
+            clearInterval(nextPrayerTimeout);
+            // Refresh to show next prayer
+            fetchPrayerTimes();
+            return;
+        }
+
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+        const str = `\${hours.toString().padStart(2, '0')}:\${minutes.toString().padStart(2, '0')}:\${seconds.toString().padStart(2, '0')}`;
+
+        const homeEl = document.getElementById("prayer-countdown-home");
+        if (homeEl) homeEl.innerText = `- \${str}`;
+
+        // Hero Update
+        const heroCount = document.getElementById("prayer-countdown-hero");
+        if (heroCount) heroCount.innerText = str;
+    }
+
+    update(); // Run immediately
+    nextPrayerTimeout = setInterval(update, 1000);
+}
+
+function scheduleNotifications(timings) {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+
+    // Simple check loop every minute to see if a prayer time matches NOW
+    // In a real PWA, you'd use Push Notifications or Background Sync, 
+    // but a simple interval works while the app is open.
+
+    // Clear existing interval if any
+    if (window.prayerNotificationInterval) clearInterval(window.prayerNotificationInterval);
+
+    window.prayerNotificationInterval = setInterval(() => {
+        const now = new Date();
+        const currentTime = `\${now.getHours().toString().padStart(2, '0')}:\${now.getMinutes().toString().padStart(2, '0')}`;
+
+        // Prayer names map (English keys from API)
+        const prayerNamesConfig = {
+            Fajr: { ar: "الفجر", en: "Fajr" },
+            Dhuhr: { ar: "الظهر", en: "Dhuhr" },
+            Asr: { ar: "العصر", en: "Asr" },
+            Maghrib: { ar: "المغرب", en: "Maghrib" },
+            Isha: { ar: "العشاء", en: "Isha" }
+        };
+
+        for (const [key, val] of Object.entries(prayerNamesConfig)) {
+            // Remove (EST) or timezone info if present in timings (API usually returns HH:MM)
+            const prayerTime = timings[key].split(' ')[0];
+
+            if (currentTime === prayerTime && now.getSeconds() < 2) {
+                const pName = lang === 'ar' ? val.ar : val.en;
+                new Notification(lang === 'ar' ? "حان الآن موعد الصلاة" : "Prayer Time", {
+                    body: lang === 'ar' ? `حان الآن موعد صلاة \${pName}` : `It is time for \${pName} prayer`,
+                    icon: "icon-192.png"
+                });
+                playAudio(); // Create a dedicated adhan sound function ideally
+            }
+        }
+    }, 1000);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -282,6 +1021,100 @@ document.addEventListener("DOMContentLoaded", () => {
     updateThemeIcon();
     applyLanguage();
     updateTasbeehDisplay();
+    initCalcMethodSelect();
+    initSettings();
+    initReminders();
     setTimeout(() => document.getElementById('splash-screen')?.classList.add('splash-hidden'), 2000);
     showView('home');
+
+    // Initial Fetch for Prayer Times (if configured/allowed previously)
+    // Or wait for user to enter view. For good UX, let's fetch if we have data.
+    if (localStorage.getItem("prayerTimesData")) {
+        fetchPrayerTimes();
+    }
+    requestNotificationPermission();
 });
+
+// Qibla Compass Logic
+let qiblaDirection = 0;
+
+function initQiblaView() {
+    showView('qibla');
+    initQibla();
+}
+
+function initQibla() {
+    const statusEl = document.getElementById("qibla-status");
+    if (statusEl) statusEl.innerText = texts[lang].calibrating;
+
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition((position) => {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+
+            qiblaDirection = calculateQibla(lat, lng);
+            if (statusEl) statusEl.innerText = lang === 'ar' ? `القبلة: ${Math.round(qiblaDirection)}°` : `Qibla: ${Math.round(qiblaDirection)}°`;
+
+            startCompass();
+
+        }, (error) => {
+            console.error(error);
+            if (statusEl) statusEl.innerText = lang === 'ar' ? "تعذر تحديد الموقع" : "Location unavailable";
+            alert(lang === 'ar' ? "يرجى تفعيل خدمة الموقع" : "Please enable location services.");
+        });
+    } else {
+        alert("Geolocation not supported.");
+    }
+}
+
+function calculateQibla(lat, lng) {
+    const makkahLat = 21.4225;
+    const makkahLng = 39.8262;
+
+    const latRad = lat * (Math.PI / 180);
+    const makkahLatRad = makkahLat * (Math.PI / 180);
+    const lngDiffRad = (makkahLng - lng) * (Math.PI / 180);
+
+    const y = Math.sin(lngDiffRad) * Math.cos(makkahLatRad);
+    const x = Math.cos(latRad) * Math.sin(makkahLatRad) - Math.sin(latRad) * Math.cos(makkahLatRad) * Math.cos(lngDiffRad);
+
+    let qibla = Math.atan2(y, x) * (180 / Math.PI);
+    return (qibla + 360) % 360;
+}
+
+function startCompass() {
+    if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        document.getElementById("calibration-msg").style.display = "block";
+        document.getElementById("calibration-msg").onclick = () => {
+            DeviceOrientationEvent.requestPermission()
+                .then(response => {
+                    if (response === 'granted') {
+                        document.getElementById("calibration-msg").style.display = "none";
+                        window.addEventListener('deviceorientation', handleOrientation);
+                    } else {
+                        alert("Permission denied");
+                    }
+                })
+                .catch(console.error);
+        };
+    } else {
+        window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+        window.addEventListener('deviceorientation', handleOrientation, true);
+    }
+}
+
+function handleOrientation(event) {
+    let alpha = event.alpha;
+    if (event.webkitCompassHeading) alpha = event.webkitCompassHeading;
+    else if (event.absolute && event.alpha !== null) alpha = 360 - event.alpha;
+
+    if (alpha == null) return;
+
+    const dial = document.getElementById("compass-dial");
+    const pointer = document.getElementById("qibla-pointer");
+    const degDisplay = document.getElementById("qibla-deg");
+
+    if (dial) dial.style.transform = `rotate(${-alpha}deg)`;
+    if (pointer) pointer.style.transform = `translate(-50%, -100%) rotate(${qiblaDirection}deg)`;
+    if (degDisplay) degDisplay.innerText = `${Math.round(qiblaDirection)}°`;
+}

@@ -116,6 +116,41 @@ if (workbox) {
         })
     );
 
+    // 5. Quran API: Cache First (Forever)
+    workbox.routing.registerRoute(
+        ({ url }) => url.origin === 'https://api.alquran.cloud',
+        new workbox.strategies.CacheFirst({
+            cacheName: 'quran-data',
+            plugins: [
+                new workbox.cacheableResponse.CacheableResponsePlugin({
+                    statuses: [0, 200],
+                }),
+                new workbox.expiration.ExpirationPlugin({
+                    maxAgeSeconds: 60 * 60 * 24 * 365, // 1 Year
+                    maxEntries: 500,
+                }),
+            ],
+        })
+    );
+
+    // 6. Prayer Times API: Stale While Revalidate
+    // We use StaleWhileRevalidate so user sees cached times instantly, 
+    // while we fetch updated times for accuracy (e.g. location change)
+    workbox.routing.registerRoute(
+        ({ url }) => url.origin === 'http://api.aladhan.com' || url.origin === 'https://api.aladhan.com',
+        new workbox.strategies.StaleWhileRevalidate({
+            cacheName: 'prayer-times',
+            plugins: [
+                new workbox.cacheableResponse.CacheableResponsePlugin({
+                    statuses: [0, 200],
+                }),
+                new workbox.expiration.ExpirationPlugin({
+                    maxAgeSeconds: 60 * 60 * 24 * 30, // 30 Days
+                }),
+            ],
+        })
+    );
+
 } else {
     // Basic Fallback for when workbox fails to load
     self.addEventListener('fetch', (event) => {
