@@ -162,7 +162,7 @@ function nextDhikr() {
         repeatTarget = adhkar[currentCategory][currentIndex].count || 1;
         renderDhikr();
     } else {
-        alert(texts[lang].done);
+        showToast('✅', texts[lang].done);
         showView('home');
     }
 }
@@ -222,18 +222,19 @@ function toggleFavorite() {
 function renderFavorites() {
     const container = document.getElementById("favorites-list");
     container.innerHTML = favorites.length ? "" : `<p style="text-align:center; color:var(--text-secondary); margin-top:2rem;">${lang === 'ar' ? 'لا توجد مفضلات' : 'No favorites'}</p>`;
-    favorites.forEach(text => {
+    favorites.forEach((text, index) => {
         const div = document.createElement("div");
         div.className = "dhikr-card fade-in";
         div.style.padding = "1.5rem";
         div.innerHTML = `<p class="dhikr-arabic" style="font-size:1.2rem; margin-bottom:1rem;">${text}</p>
-                         <button onclick="removeFavorite('${text.replace(/'/g, "\\'")}')" class="icon-btn" style="color:#ef4444;"><i class="ph ph-trash"></i></button>`;
+                         <button data-fav-index="${index}" class="icon-btn" style="color:#ef4444;"><i class="ph ph-trash"></i></button>`;
+        div.querySelector('button').addEventListener('click', () => removeFavorite(index));
         container.appendChild(div);
     });
 }
 
-function removeFavorite(text) {
-    favorites = favorites.filter(f => f !== text);
+function removeFavorite(index) {
+    favorites.splice(index, 1);
     localStorage.setItem("fav", JSON.stringify(favorites));
     renderFavorites();
 }
@@ -280,19 +281,33 @@ function resetRamadanList() {
 
 // Quran Logic
 let allSurahs = [];
+let quranFont = localStorage.getItem("quranFont") || "'Amiri', serif";
+let quranTheme = localStorage.getItem("quranTheme") || "white";
+let quranReciter = localStorage.getItem("quranReciter") || "ar.alafasy";
+let lastReadSurah = JSON.parse(localStorage.getItem("lastReadSurah")) || null;
+
 
 async function openQuranList() {
     showView('quran-list');
-    if (allSurahs.length === 0) {
-        const container = document.getElementById("surah-list-container");
-        container.innerHTML = '<div style="text-align:center; padding:2rem;"><div class="splash-loader" style="margin:0 auto;"></div><p style="margin-top:1rem;">جاري تحميل قائمة السور...</p></div>';
 
-        try {
-            const response = await fetch('https://api.alquran.cloud/v1/surah');
-            const data = await response.json();
-            allSurahs = data.data;
-            renderSurahList(allSurahs);
-        } catch (error) {
+    // 1. Try Memory
+    if (allSurahs.length > 0) return;
+
+    const container = document.getElementById("surah-list-container");
+    // Show Skeleton List
+    container.innerHTML = Array(10).fill('<div class="skeleton-card"></div>').join('');
+
+    try {
+        const response = await fetch('https://api.alquran.cloud/v1/surah');
+        const data = await response.json();
+        allSurahs = data.data;
+
+        // Update Cache
+        localStorage.setItem("quranSurahList", JSON.stringify(allSurahs));
+        renderSurahList(allSurahs);
+    } catch (error) {
+        console.error("Quran List Logic Error:", error);
+        if (!cachedList) {
             container.innerHTML = '<p style="text-align:center; color:#ef4444; padding:2rem;">فشل تحميل قائمة السور. يرجى التأكد من الاتصال بالإنترنت.</p>';
         }
     }
@@ -302,6 +317,7 @@ function renderSurahList(surahs) {
     const container = document.getElementById("surah-list-container");
     container.innerHTML = "";
     surahs.forEach(surah => {
+        const isCached = localStorage.getItem(`quran_surah_${surah.number}`) !== null;
         const div = document.createElement("div");
         div.className = "category-card";
         div.style.flexDirection = "row";
@@ -314,7 +330,10 @@ function renderSurahList(surahs) {
             <div style="display: flex; align-items: center; gap: 1rem;">
                 <span style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: var(--primary-light); color: var(--primary-color); border-radius: 50%; font-weight: 800; font-size: 0.9rem;">${surah.number}</span>
                 <div style="text-align: right;">
-                    <h3 class="category-title" style="margin: 0; font-size: 1.1rem;">${surah.name}</h3>
+                    <h3 class="category-title" style="margin: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem;">
+                        ${surah.name}
+                        ${isCached ? '<i class="ph ph-check-circle" style="color: var(--primary-color); font-size: 0.9rem;" title="متاح بدون إنترنت"></i>' : ''}
+                    </h3>
                     <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0;">${surah.englishName} • ${surah.numberOfAyahs} آية</p>
                 </div>
             </div>
@@ -342,29 +361,62 @@ let currentSurahNumber = 1;
 async function openSurah(number, name) {
     showView('quran-read');
     document.getElementById("surah-read-title").innerText = name;
-    currentSurahNumber = number; // Update state
+    document.getElementById("surah-info-subtitle").innerText = `رقمها ${number}`;
+    currentSurahNumber = number;
+
+    // Save as last read
+    lastReadSurah = { number, name, time: Date.now() };
+    localStorage.setItem("lastReadSurah", JSON.stringify(lastReadSurah));
+    updateResumeCard();
+
     const container = document.getElementById("surah-content");
-    container.innerHTML = '<div style="text-align:center; padding:2rem;"><div class="splash-loader" style="margin:0 auto;"></div><p style="margin-top:1rem;">جاري تحميل الآيات والتفسير...</p></div>';
+
+    // 1. Check Offline Cache
+    const cachedData = localStorage.getItem(`quran_surah_${number}`);
+    if (cachedData) {
+        currentSurahData = JSON.parse(cachedData);
+        renderSurah(currentSurahData, number);
+        // Silently update list for cached icons in background
+        return;
+    }
+
+    // Show Skeleton Page
+    if (!localStorage.getItem(`quran_surah_${number}`)) {
+        container.innerHTML = `
+            <div style="padding: 2rem;">
+                <div class="skeleton" style="height: 40px; width: 80%; margin: 0 auto 2rem;"></div>
+                <div class="skeleton" style="height: 200px; width: 100%; margin-bottom: 1rem;"></div>
+                <div class="skeleton" style="height: 200px; width: 100%; margin-bottom: 1rem;"></div>
+                <div class="skeleton" style="height: 150px; width: 90%; margin: 0 auto;"></div>
+            </div>
+        `;
+    }
 
     try {
-        // Fetch Quran and Tafseer (Al-Muyassar) in one go
         const response = await fetch(`https://api.alquran.cloud/v1/surah/${number}/editions/quran-uthmani,ar.muyassar`);
         const data = await response.json();
 
-        // Organize data: edition[0] is Quran, edition[1] is Tafseer
         const quranAyahs = data.data[0].ayahs;
         const tafseerAyahs = data.data[1].ayahs;
 
-        // Merge them
         currentSurahData = quranAyahs.map((ayah, i) => ({
             ...ayah,
             tafseer: tafseerAyahs[i].text
         }));
 
+        // 2. Save to Cache
+        localStorage.setItem(`quran_surah_${number}`, JSON.stringify(currentSurahData));
+
         renderSurah(currentSurahData, number);
     } catch (error) {
-        console.error(error);
-        container.innerHTML = '<p style="text-align:center; color:#ef4444; padding:2rem;">فشل تحميل السورة. يرجى التأكد من الاتصال بالإنترنت.</p>';
+        console.error("Open Surah Error:", error);
+        container.innerHTML = `
+            <div style="text-align:center; padding:2rem; color:var(--text-secondary);">
+                <i class="ph ph-wifi-high-slash" style="font-size:3rem; margin-bottom:1rem; color:var(--danger-color);"></i>
+                <p>هذه السورة غير متاحة للاستخدام بدون إنترنت حالياً. يرجى الاتصال ثم العودة لتحميلها.</p>
+                <button onclick="openSurah(${number}, '${name}')" class="main-btn" style="margin-top:1rem; padding:0.5rem 1rem;">إعادة المحاولة</button>
+            </div>
+        `;
     }
 }
 
@@ -422,103 +474,253 @@ function renderSurah(ayahs, surahNumber) {
 
     container.innerHTML = html;
 
+    applyQuranStyles(); // Apply user themes/fonts
+    updateReadingProgress(); // Initial progress
+
     // Reset Scroll
-    if (readingMode === 'vertical') window.scrollTo(0, 0);
-    else container.scrollLeft = container.scrollWidth; // Start from right (RTL)
+    if (readingMode === 'vertical') {
+        window.scrollTo(0, 0);
+        window.onscroll = updateReadingProgress;
+    }
+    else {
+        container.scrollLeft = container.scrollWidth; // Start from right (RTL)
+        container.onscroll = updateReadingProgress;
+    }
+}
+
+function updateReadingProgress() {
+    const progressBar = document.getElementById('quran-reading-progress');
+    if (!progressBar) return;
+
+    let percentage = 0;
+    if (readingMode === 'vertical') {
+        const totalHeight = document.body.scrollHeight - window.innerHeight;
+        percentage = (window.scrollY / totalHeight) * 100;
+    } else {
+        const container = document.getElementById('surah-content');
+        const scrollWidth = container.scrollWidth - container.clientWidth;
+        // In RTL, scrollLeft is negative or starts at 0 and goes negative
+        percentage = (Math.abs(container.scrollLeft) / scrollWidth) * 100;
+    }
+
+    progressBar.style.width = `${Math.min(100, Math.max(0, percentage))}%`;
 }
 
 // Auto Scroll Logic
-let autoScrollInterval = null;
-let isScrolling = false;
-let scrollSpeed = 1; // 1x
+let autoScrollRAF = null;
+let isAutoScrolling = false;
+let scrollSpeed = parseFloat(localStorage.getItem("quranScrollSpeed")) || 1.0;
 
 function toggleAutoScroll() {
-    const btn = document.getElementById("btn-auto-scroll");
-    const icon = btn.querySelector("i");
-
-    if (isScrolling) {
+    if (isAutoScrolling) {
         stopAutoScroll();
-        if (icon) icon.className = "ph ph-play";
     } else {
         startAutoScroll();
-        if (icon) icon.className = "ph ph-pause";
     }
 }
 
 function startAutoScroll() {
+    if (isAutoScrolling) return;
     isAutoScrolling = true;
 
-    const btn = document.getElementById('btn-auto-scroll');
-    btn.classList.add('active');
-    btn.querySelector('i').className = "ph ph-pause";
-
-    // Disable sleep prevention would go here if we had a plugin for it
-
-    if (readingMode === 'vertical') {
-        const intervalTime = 50 / scrollSpeed; // Base 50ms. 2x = 25ms
-        autoScrollInterval = setInterval(() => {
-            window.scrollBy(0, 1);
-            // Check if reached bottom
-            if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight) {
-                stopAutoScroll();
-            }
-        }, intervalTime);
-    } else {
-        // Horizontal Mode: Flip every N seconds
-        const baseDelay = 6000; // 6 seconds base for a card
-        const delay = baseDelay / scrollSpeed;
-
-        autoScrollInterval = setInterval(() => {
-            const container = document.getElementById("surah-content");
-            const cardWidth = container.offsetWidth; // approximate
-            // If strictly snap, we can just scrollBy width
-            container.scrollBy({ left: -cardWidth, behavior: 'smooth' }); // RTL: negative left
-
-            // Check boundaries
-            if (Math.abs(container.scrollLeft) >= (container.scrollWidth - container.clientWidth - 10)) {
-                stopAutoScroll();
-            }
-        }, delay);
+    // UI Updates
+    const topBtn = document.getElementById('btn-auto-scroll-top');
+    if (topBtn) {
+        topBtn.classList.add('active');
+        topBtn.querySelector('i').className = "ph ph-pause";
     }
+
+    const floatingBar = document.getElementById('floating-scroll-bar');
+    if (floatingBar) {
+        floatingBar.classList.remove('hidden');
+        document.getElementById('speed-val-display').innerText = scrollSpeed.toFixed(1);
+        document.getElementById('scroll-speed-slider').value = scrollSpeed;
+    }
+
+    // Scroll Animation
+    let lastTime = 0;
+    function animateScroll(time) {
+        if (!isAutoScrolling) return;
+
+        if (lastTime !== 0) {
+            const deltaTime = time - lastTime;
+            const scrollStep = (scrollSpeed * deltaTime) / 50; // Adjust divisor for base speed
+
+            if (readingMode === 'vertical') {
+                window.scrollBy(0, scrollStep);
+                if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 2) {
+                    stopAutoScroll();
+                    return;
+                }
+            } else {
+                // Horizontal scroll logic (less common for auto-scroll but kept for consistency)
+                const container = document.getElementById("surah-content");
+                container.scrollLeft -= scrollStep * 2; // Faster horizontal scroll
+                if (Math.abs(container.scrollLeft) >= (container.scrollWidth - container.clientWidth - 5)) {
+                    stopAutoScroll();
+                    return;
+                }
+            }
+        }
+        lastTime = time;
+        autoScrollRAF = requestAnimationFrame(animateScroll);
+    }
+    autoScrollRAF = requestAnimationFrame(animateScroll);
 }
 
 function stopAutoScroll() {
     isAutoScrolling = false;
-    clearInterval(autoScrollInterval);
-    const btn = document.getElementById('btn-auto-scroll');
-    if (btn) {
-        btn.classList.remove('active');
-        btn.querySelector('i').className = "ph ph-play";
+    cancelAnimationFrame(autoScrollRAF);
+
+    // UI Updates
+    const topBtn = document.getElementById('btn-auto-scroll-top');
+    if (topBtn) {
+        topBtn.classList.remove('active');
+        topBtn.querySelector('i').className = "ph ph-play";
     }
+
+    const floatingBar = document.getElementById('floating-scroll-bar');
+    if (floatingBar) floatingBar.classList.add('hidden');
 }
 
-function updateScrollSpeed() {
-    scrollSpeed = parseFloat(document.getElementById('scroll-speed').value);
-    if (isAutoScrolling) {
-        stopAutoScroll();
-        startAutoScroll(); // Restart with new speed
-    }
+function updateScrollSpeedSlider() {
+    scrollSpeed = parseFloat(document.getElementById('scroll-speed-slider').value);
+    document.getElementById('speed-val-display').innerText = scrollSpeed.toFixed(1);
+    localStorage.setItem("quranScrollSpeed", scrollSpeed);
 }
 
-// Modify toggleReadingMode to stop scroll
-function toggleReadingMode() {
-    stopAutoScroll(); // Stop logic
+// Quran Settings Modal Functions
+function openQuranSettings() {
+    document.getElementById('modal-quran-settings').classList.remove('hidden');
+    // Sync UI with state
+    document.getElementById('quran-font-select').value = quranFont;
+    document.getElementById('quran-reciter-select').value = quranReciter;
+    document.querySelectorAll('.theme-option').forEach(opt => opt.classList.remove('active'));
+    document.querySelector(`.theme-${quranTheme}`).classList.add('active');
+    document.getElementById('tafseer-toggle-global').checked = showTafseer;
 
-    readingMode = readingMode === 'vertical' ? 'horizontal' : 'vertical';
-    const btn = document.getElementById('btn-reading-mode');
-    if (readingMode === 'horizontal') {
-        btn.classList.add('active');
-        btn.querySelector('i').className = "ph ph-arrows-out-line-vertical";
-    } else {
-        btn.classList.remove('active');
-        btn.querySelector('i').className = "ph ph-arrows-out-line-horizontal";
-    }
+    // Sync Reading Mode toggle
+    document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(`mode-${readingMode}`).classList.add('active');
+}
 
-    // Re-render if data exists
+function closeQuranSettings() {
+    document.getElementById('modal-quran-settings').classList.add('hidden');
+}
+
+function setReadingMode(mode) {
+    if (readingMode === mode) return;
+    readingMode = mode;
+
+    // UI Update
+    document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(`mode-${mode}`).classList.add('active');
+
+    stopAutoScroll();
     if (currentSurahData) {
         renderSurah(currentSurahData, currentSurahNumber);
     }
 }
+
+function setQuranTheme(themeName) {
+    quranTheme = themeName;
+    localStorage.setItem("quranTheme", themeName);
+
+    // UI Update
+    document.querySelectorAll('.theme-option').forEach(opt => opt.classList.remove('active'));
+    document.querySelector(`.theme-${themeName}`).classList.add('active');
+
+    applyQuranStyles();
+}
+
+function changeQuranFont() {
+    quranFont = document.getElementById('quran-font-select').value;
+    localStorage.setItem("quranFont", quranFont);
+    applyQuranStyles();
+}
+
+function changeQuranReciter() {
+    quranReciter = document.getElementById('quran-reciter-select').value;
+    localStorage.setItem("quranReciter", quranReciter);
+    // Note: Future implementation could auto-play surah with this reciter
+}
+
+function applyQuranStyles() {
+    const container = document.getElementById("surah-content");
+    if (!container) return;
+
+    // Clear themes
+    container.classList.remove('theme-white', 'theme-sepia', 'theme-dark', 'theme-uthmanic');
+    container.classList.add(`theme-${quranTheme}`);
+
+    // Apply font
+    container.style.fontFamily = quranFont;
+
+    // Also apply to specific children if needed
+    document.querySelectorAll('.ayah-text').forEach(el => {
+        el.style.fontFamily = quranFont;
+    });
+
+    // Handle Scroll Position for Resume
+    const savedPos = localStorage.getItem(`scrollPos_${surahNumber}`);
+    if (savedPos) {
+        setTimeout(() => {
+            window.scrollTo({ top: parseInt(savedPos), behavior: 'smooth' });
+        }, 300);
+    }
+}
+
+// Navigation & Bookmarking logic
+function goToNextSurah() {
+    if (currentSurahNumber < 114) {
+        const next = allSurahs.find(s => s.number === currentSurahNumber + 1);
+        if (next) openSurah(next.number, next.name);
+    }
+}
+
+function goToPrevSurah() {
+    if (currentSurahNumber > 1) {
+        const prev = allSurahs.find(s => s.number === currentSurahNumber - 1);
+        if (prev) openSurah(prev.number, prev.name);
+    }
+}
+
+function saveQuranBookmark() {
+    const scrollPos = window.scrollY;
+    localStorage.setItem(`scrollPos_${currentSurahNumber}`, scrollPos);
+
+    // UI Feedback
+    const btn = document.getElementById('btn-save-bookmark');
+    btn.classList.add('btn-saved');
+    setTimeout(() => btn.classList.remove('btn-saved'), 2000);
+
+    hapticFeedback(60);
+}
+
+function updateResumeCard() {
+    const card = document.getElementById('resume-quran-card');
+    const nameEl = document.getElementById('resume-surah-name');
+
+    if (lastReadSurah) {
+        card.classList.remove('hidden');
+        nameEl.innerText = lastReadSurah.name;
+    } else {
+        card.classList.add('hidden');
+    }
+}
+
+function resumeQuranReading() {
+    if (lastReadSurah) {
+        openSurah(lastReadSurah.number, lastReadSurah.name);
+    }
+}
+
+// Update Home UI on load
+document.addEventListener('DOMContentLoaded', () => {
+    updateResumeCard();
+    // Auto-resume if needed logic could go here
+});
+
 
 function toggleTafseerVisibility() {
     showTafseer = !showTafseer;
@@ -547,9 +749,11 @@ function hapticFeedback(pattern) {
 }
 
 function playAudio() {
-    const item = adhkar[currentCategory][currentIndex];
-    if (item.audio) new Audio(item.audio).play().catch(() => alert("Error playing audio"));
-    else alert(lang === 'ar' ? "الصوت غير متوفر" : "Audio unavailable");
+    const items = adhkar[currentCategory];
+    if (!items || !items[currentIndex]) return;
+    const item = items[currentIndex];
+    if (item.audio) new Audio(item.audio).play().catch(() => showToast('⚠️', lang === 'ar' ? 'خطأ في تشغيل الصوت' : 'Error playing audio'));
+    else showToast('🔇', lang === 'ar' ? 'الصوت غير متوفر' : 'Audio unavailable');
 }
 
 // Reminder Interval Logic
@@ -678,23 +882,22 @@ function checkAndTriggerReminder() {
 }
 
 function triggerReminder() {
-    // Pick a random dhikr title
+    // Pick a random dhikr
+    if (typeof azkarData === 'undefined' || !azkarData.length) return;
     const randomCat = azkarData[Math.floor(Math.random() * azkarData.length)];
-    const text = randomCat.items[0].ar;
+    const text = randomCat.items[Math.floor(Math.random() * randomCat.items.length)].ar;
 
     // System Notification
     if ("Notification" in window && Notification.permission === "granted") {
         new Notification(lang === 'ar' ? "تذكير" : "Reminder", {
-            body: lang === 'ar' ? "حان وقت ذكر الله" : "Time to remember Allah",
+            body: text,
             icon: "icon-192.png",
             tag: "dhikr-reminder"
         });
     }
 
     // In-App Toast
-    showToast(lang === 'ar' ? "ذكر الله" : "Dhikr", text);
-
-    playAudio();
+    showToast(lang === 'ar' ? "🕌 ذكر الله" : "🕌 Dhikr", text);
 }
 
 // Toast System
@@ -730,7 +933,7 @@ document.getElementById("reminder-toggle")?.addEventListener('change', () => req
 let prayerTimes = null;
 let nextPrayerTimeout = null;
 let notificationPermission = false;
-let calcMethod = localStorage.getItem("prayerTimesMethod") || "4"; // Default Makkah
+let calcMethod = localStorage.getItem("prayerTimesMethod") || "5"; // Default Egyptian General Authority
 let asrMethod = localStorage.getItem("asrMethod") || "0"; // Default Standard (0)
 let quranSurahs = [];
 
@@ -749,7 +952,7 @@ function saveCalcMethod() {
         calcMethod = select.value;
         localStorage.setItem("calcMethod", calcMethod);
         fetchPrayerTimes(true); // Refresh with new method
-        alert(texts[lang].done);
+        showToast('✅', texts[lang].done);
     }
 }
 
@@ -761,33 +964,93 @@ function initCalcMethodSelect() {
     }
 }
 
-// Geolocation Helper
+// Geolocation Helper with Caching
 function getUserLocation() {
     return new Promise((resolve, reject) => {
+        // Try cached location first (valid for 30 minutes)
+        const cachedLat = localStorage.getItem("cachedLat");
+        const cachedLng = localStorage.getItem("cachedLng");
+        const cachedTime = localStorage.getItem("cachedLocTime");
+        const cacheAge = cachedTime ? (Date.now() - parseInt(cachedTime)) : Infinity;
+
+        if (cachedLat && cachedLng && cacheAge < 30 * 60 * 1000) {
+            resolve({ lat: parseFloat(cachedLat), lng: parseFloat(cachedLng) });
+            return;
+        }
+
         if (!navigator.geolocation) {
-            reject(new Error("Geolocation not supported"));
+            // Fall back to cached if available
+            if (cachedLat && cachedLng) {
+                resolve({ lat: parseFloat(cachedLat), lng: parseFloat(cachedLng) });
+            } else {
+                reject(new Error("Geolocation not supported"));
+            }
             return;
         }
 
         const options = {
             enableHighAccuracy: true,
-            timeout: 15000, // Increased timeout for mobile
-            maximumAge: 0
+            timeout: 20000,
+            maximumAge: 300000 // 5 minutes cache
         };
 
         navigator.geolocation.getCurrentPosition(
             (position) => {
-                resolve({
+                const coords = {
                     lat: position.coords.latitude,
                     lng: position.coords.longitude
-                });
+                };
+                // Cache location
+                localStorage.setItem("cachedLat", coords.lat);
+                localStorage.setItem("cachedLng", coords.lng);
+                localStorage.setItem("cachedLocTime", Date.now().toString());
+                resolve(coords);
             },
             (error) => {
-                reject(error);
+                // Fall back to cached location on error
+                if (cachedLat && cachedLng) {
+                    resolve({ lat: parseFloat(cachedLat), lng: parseFloat(cachedLng) });
+                } else {
+                    reject(error);
+                }
             },
             options
         );
     });
+}
+
+// Reverse Geocoding — get city name from coordinates
+async function reverseGeocode(lat, lng) {
+    try {
+        // Try cached city name first
+        const cachedCity = localStorage.getItem("cachedCityName");
+        const cachedCityLat = localStorage.getItem("cachedCityLat");
+        const cachedCityLng = localStorage.getItem("cachedCityLng");
+
+        // If same approx location, use cached city
+        if (cachedCity && cachedCityLat && cachedCityLng) {
+            const dLat = Math.abs(parseFloat(cachedCityLat) - lat);
+            const dLng = Math.abs(parseFloat(cachedCityLng) - lng);
+            if (dLat < 0.05 && dLng < 0.05) return cachedCity;
+        }
+
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=ar&zoom=10`);
+        const data = await response.json();
+
+        const address = data.address || {};
+        const city = address.city || address.town || address.village || address.county || address.state || '';
+        const country = address.country || '';
+        const locationName = city && country ? `${city}، ${country}` : city || country || `${lat.toFixed(2)}, ${lng.toFixed(2)}`;
+
+        // Cache city name
+        localStorage.setItem("cachedCityName", locationName);
+        localStorage.setItem("cachedCityLat", lat.toString());
+        localStorage.setItem("cachedCityLng", lng.toString());
+
+        return locationName;
+    } catch {
+        return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    }
 }
 
 async function fetchPrayerTimes(forceRefresh = false) {
@@ -805,15 +1068,24 @@ async function fetchPrayerTimes(forceRefresh = false) {
         if (cached && cachedDate === today && cachedMethod === calcMethod && cachedAsr === asrMethod) {
             prayerTimes = JSON.parse(cached);
             renderPrayerTimes(prayerTimes);
+            // Restore city name
+            const cityName = localStorage.getItem("cachedCityName");
+            if (cityName) {
+                document.getElementById("location-name").innerText = `📍 ${cityName}`;
+            }
             return;
         }
     }
 
     try {
-        document.getElementById("location-name").innerText = lang === 'ar' ? "جاري تحديد الموقع..." : "Locating...";
+        document.getElementById("location-name").innerText = lang === 'ar' ? "⏳ جاري تحديد الموقع..." : "⏳ Locating...";
 
         const coords = await getUserLocation();
         const date = new Date();
+
+        // Reverse geocode to get city name
+        const locationName = await reverseGeocode(coords.lat, coords.lng);
+        document.getElementById("location-name").innerText = `📍 ${locationName}`;
 
         // Fetch today's timings
         const response = await fetch(`https://api.aladhan.com/v1/timings/${Math.floor(date.getTime() / 1000)}?latitude=${coords.lat}&longitude=${coords.lng}&method=${calcMethod}&school=${asrMethod}`);
@@ -825,9 +1097,6 @@ async function fetchPrayerTimes(forceRefresh = false) {
         localStorage.setItem("prayerTimesMethod", calcMethod);
         localStorage.setItem("asrMethod", asrMethod);
 
-        // Update Location Name
-        document.getElementById("location-name").innerText = `Lat: ${coords.lat.toFixed(4)}, Lon: ${coords.lng.toFixed(4)}`;
-
         renderPrayerTimes(prayerTimes);
 
     } catch (error) {
@@ -838,12 +1107,12 @@ async function fetchPrayerTimes(forceRefresh = false) {
         let actionBtn = `<button onclick="fetchPrayerTimes(true)" class="main-btn" style="margin-top:1rem; padding:0.5rem 1.5rem; border-radius:var(--radius-full); background:var(--primary-color); color:white;">${lang === 'ar' ? 'إعادة المحاولة' : 'Retry'}</button>`;
 
         if (error.code === 1) { // Permission Denied
-            errorMsg = lang === 'ar' ? "تم رفض إذن الموقع. يرجى تفعيله من إعدادات المتصفح." : "Location permission denied. Please enable it in browser settings.";
-            actionBtn = ""; // Can't retry if denied, user must fix settings
+            errorMsg = lang === 'ar' ? "تم رفض إذن الموقع. يرجى تفعيله من إعدادات الهاتف (التطبيقات > أنصاري > الأذونات)." : "Location permission denied. Please enable it in Phone Settings (Apps > Ansari > Permissions).";
+            actionBtn = `<button onclick="fetchPrayerTimes(true)" class="main-btn" style="margin-top:1rem; padding:0.5rem 1.5rem; border-radius:var(--radius-full); background:var(--primary-color); color:white;">${lang === 'ar' ? 'تحديث الإذن' : 'Refresh Permission'}</button>`;
         } else if (error.code === 2) { // Position Unavailable
-            errorMsg = lang === 'ar' ? "تعذر تحديد الموقع بدقة." : "Location unavailable.";
+            errorMsg = lang === 'ar' ? "تعذر تحديد الموقع بدقة. تأكد من تفعيل الـ GPS." : "Location unavailable. Please ensure GPS is ON.";
         } else if (error.code === 3) { // Timeout
-            errorMsg = lang === 'ar' ? "انتهت مهلة تحديد الموقع." : "Location request timed out.";
+            errorMsg = lang === 'ar' ? "انتهت مهلة تحديد الموقع. يرجى المحاولة مرة أخرى." : "Location request timed out. Please try again.";
         }
 
         if (container) {
@@ -855,7 +1124,7 @@ async function fetchPrayerTimes(forceRefresh = false) {
                 </div>
             `;
         }
-        document.getElementById("location-name").innerText = lang === 'ar' ? "خطأ في الموقع" : "Location Error";
+        document.getElementById("location-name").innerText = lang === 'ar' ? "❌ خطأ في الموقع" : "❌ Location Error";
     }
 }
 
@@ -911,10 +1180,6 @@ function initSettings() {
     const haEl = document.getElementById("hijri-adj-value");
     if (haEl) haEl.innerText = (hijriAdjustment > 0 ? "+" : "") + hijriAdjustment;
 
-    if (document.getElementById("night-mode-toggle")) {
-        document.getElementById("night-mode-toggle").checked = isNightMode;
-    }
-
     // Init Calc Method
     if (document.getElementById("calc-method")) {
         document.getElementById("calc-method").value = calcMethod;
@@ -926,12 +1191,13 @@ function initSettings() {
 }
 
 function saveSettings() {
-    isNightMode = document.getElementById("night-mode-toggle").checked;
-    setTheme(isNightMode);
-
     // Save Calc Method
-    const newMethod = document.getElementById("calc-method").value;
-    const newAsr = document.getElementById("asr-method").value;
+    const calcEl = document.getElementById("calc-method");
+    const asrEl = document.getElementById("asr-method");
+    if (!calcEl || !asrEl) return;
+
+    const newMethod = calcEl.value;
+    const newAsr = asrEl.value;
 
     let needRefresh = false;
     if (newMethod !== calcMethod || newAsr !== asrMethod) {
@@ -947,7 +1213,7 @@ function saveSettings() {
         fetchPrayerTimes(true);
     }
 
-    showToast(texts[lang].done, lang === 'ar' ? "تم حفظ الإعدادات" : "Settings saved");
+    showToast('✅', lang === 'ar' ? "تم حفظ الإعدادات" : "Settings saved");
 }
 
 // Update renderPrayerTimes to include Hijri Adjustment
@@ -963,9 +1229,26 @@ function renderPrayerTimes(data) {
         hijri.day = adjustedDay.toString();
     } catch (e) { console.log("Date adj error", e); }
 
+    // Arabic weekday names
+    const arWeekdays = {
+        'Saturday': 'السبت', 'Sunday': 'الأحد', 'Monday': 'الإثنين',
+        'Tuesday': 'الثلاثاء', 'Wednesday': 'الأربعاء', 'Thursday': 'الخميس', 'Friday': 'الجمعة'
+    };
+    const arMonths = {
+        'January': 'يناير', 'February': 'فبراير', 'March': 'مارس', 'April': 'أبريل',
+        'May': 'مايو', 'June': 'يونيو', 'July': 'يوليو', 'August': 'أغسطس',
+        'September': 'سبتمبر', 'October': 'أكتوبر', 'November': 'نوفمبر', 'December': 'ديسمبر'
+    };
+
     // Update Date
-    document.getElementById("hijri-date").innerText = `${hijri.day} ${hijri.month.ar} ${hijri.year}`;
-    document.getElementById("gregorian-date").innerText = `${gregorian.weekday.en}, ${gregorian.day} ${gregorian.month.en} ${gregorian.year}`;
+    document.getElementById("hijri-date").innerText = `${hijri.day} ${hijri.month.ar} ${hijri.year} هـ`;
+    if (lang === 'ar') {
+        const dayName = arWeekdays[gregorian.weekday.en] || gregorian.weekday.en;
+        const monthName = arMonths[gregorian.month.en] || gregorian.month.en;
+        document.getElementById("gregorian-date").innerText = `${dayName}، ${gregorian.day} ${monthName} ${gregorian.year}`;
+    } else {
+        document.getElementById("gregorian-date").innerText = `${gregorian.weekday.en}, ${gregorian.day} ${gregorian.month.en} ${gregorian.year}`;
+    }
 
     // prayers to show
     // Added Sunrise and Icons
@@ -1120,6 +1403,52 @@ function scheduleNotifications(timings) {
     }, 1000);
 }
 
+// Tasbeeh Functions
+function changeTasbeehDhikr() {
+    const select = document.getElementById("tasbeeh-select");
+    currentTasbeehDhikr = select.value;
+    const customFields = document.getElementById("custom-setup-fields");
+    if (customFields) {
+        customFields.classList.toggle('hidden', currentTasbeehDhikr !== 'custom');
+    }
+    updateTasbeehDisplay();
+}
+
+function updateCustomLabel() {
+    const input = document.getElementById("custom-text-input");
+    if (input) {
+        customTasbeehText = input.value;
+        localStorage.setItem("customTasbeehText", customTasbeehText);
+        updateTasbeehDisplay();
+    }
+}
+
+function updateCustomTarget() {
+    const input = document.getElementById("custom-target-input");
+    if (input) {
+        customTasbeehTarget = parseInt(input.value) || 0;
+        localStorage.setItem("customTasbeehTarget", customTasbeehTarget);
+        tasbeehTargets.custom = customTasbeehTarget;
+        updateTasbeehDisplay();
+    }
+}
+
+// Time-based greeting
+function getGreeting() {
+    const hour = new Date().getHours();
+    if (lang === 'ar') {
+        if (hour >= 5 && hour < 12) return '☀️ صباح الخير';
+        if (hour >= 12 && hour < 17) return '🌤️ طاب يومك';
+        if (hour >= 17 && hour < 21) return '🌅 مساء الخير';
+        return '🌙 طابت ليلتك';
+    } else {
+        if (hour >= 5 && hour < 12) return '☀️ Good Morning';
+        if (hour >= 12 && hour < 17) return '🌤️ Good Afternoon';
+        if (hour >= 17 && hour < 21) return '🌅 Good Evening';
+        return '🌙 Good Night';
+    }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     document.body.setAttribute("data-theme", theme);
     updateThemeIcon();
@@ -1131,8 +1460,17 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeout(() => document.getElementById('splash-screen')?.classList.add('splash-hidden'), 2000);
     showView('home');
 
-    // Initial Fetch for Prayer Times (if configured/allowed previously)
-    // Or wait for user to enter view. For good UX, let's fetch if we have data.
+    // Set greeting
+    const subtitleEl = document.getElementById('app-subtitle');
+    if (subtitleEl) subtitleEl.innerText = getGreeting();
+
+    // Restore custom tasbeeh fields
+    const customTextInput = document.getElementById('custom-text-input');
+    const customTargetInput = document.getElementById('custom-target-input');
+    if (customTextInput) customTextInput.value = customTasbeehText;
+    if (customTargetInput && customTasbeehTarget > 0) customTargetInput.value = customTasbeehTarget;
+
+    // Initial Fetch for Prayer Times
     if (localStorage.getItem("prayerTimesData")) {
         fetchPrayerTimes();
     }
