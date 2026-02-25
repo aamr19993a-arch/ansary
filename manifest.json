@@ -22,17 +22,6 @@
   "orientation": "portrait",
   "shortcuts": [
     {
-      "name": "مواقيت الصلاة",
-      "short_name": "المواقيت",
-      "url": "/index.html#view-prayer-times",
-      "icons": [
-        {
-          "src": "icon-192.png",
-          "sizes": "192x192"
-        }
-      ]
-    },
-    {
       "name": "السبحة",
       "short_name": "السبحة",
       "url": "/index.html#view-tasbeeh",

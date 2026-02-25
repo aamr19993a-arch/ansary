@@ -1,18 +1,15 @@
-# Ansari - Islamic Azkar App
+# Ansari - Islamic Dhikr App
 
-Ansari is a professional, modern web application for daily Islamic Azkar and supplications.
+Ansari is a professional, premium web application dedicated to daily Islamic Dhikr and Tasbeeh, designed with a modern, spiritual aesthetic.
 
 ## Features
-- **Prayer Times**: Automatic location-based adhan times with notifications and countdown.
-- **Holy Quran**: Full Uthmani script with offline access.
-- **Reading Modes**: Vertical Scroll and Horizontal Page Flip.
-- **Auto-Scroll**: Adjustable speed (1.0x, 1.5x, 2.0x).
-- **Tafseer**: Integrated Tafseer Al-Muyassar.
-- **Azkar Categories**: Morning, Evening, Sleep, and Post-Prayer Adhkar.
-- **Interactive Counter**: Built-in digital tasbeeh for each dhikr.
-- **Favorites**: Save your most used Adhkar for quick access.
-- **Night Mode**: Eye-friendly dark theme optimized for reading.
-- **Audio**: Calming background ambience (Rain sounds) for focus.
+- **Categorized Adhkar**: Morning, Evening, Sleep, and Post-Prayer Adhkar.
+- **Premium UI**: Modern glassmorphism design for a spiritual reading experience.
+- **Interactive Tasbeeh**: High-precision digital counter with session tracking.
+- **Micro-Animations**: Smooth view transitions and tactile feedback.
+- **Favorites**: Quick access to your most beloved supplications.
+- **Night Mode**: Beautifully crafted dark mode for nightly devotion.
+- **PWA Ready**: Install as a mobile app with offline support.
 
 ## How to Use
 1. Open `index.html` in any modern web browser (Edge, Chrome, Firefox, Safari).
